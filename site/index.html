@@ -36,7 +36,13 @@ input:focus-visible,select:focus-visible,button:focus-visible,.fl:focus-visible{
 .tabs button{flex:1 0 auto;min-height:44px;padding:0 6px;font-size:14px;border:0;background:none;border-bottom:3px solid transparent;font-weight:600;color:var(--mute);cursor:pointer}
 .tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--ink)}
 .row{display:flex;gap:8px;align-items:center}
-.inp{flex:1;height:44px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);text-transform:uppercase}
+.inp{flex:1;width:100%;height:44px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.cb{position:relative;flex:1;display:block}
+.sugg{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:300px;overflow-y:auto;min-width:240px}
+.sugg button{display:block;width:100%;text-align:left;padding:8px 10px;border:0;border-bottom:1px solid var(--line);background:none;cursor:pointer;min-height:44px}
+.sugg button:last-child{border-bottom:0}.sugg button.act,.sugg button:hover{background:var(--chip)}.sugg b{font-weight:800}.sugg small{display:block;color:var(--mute);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sugg .grp b::before{content:'◎ ';color:var(--mute)}
+.back{margin:14px 0 0;min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:none;cursor:pointer}
 select{flex:1;height:44px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
 .sw{width:44px;height:44px;border:1px solid var(--line);border-radius:8px;background:var(--bg);cursor:pointer;flex:none}
 .hint{font-size:14px;color:var(--mute);margin:10px 0}
@@ -123,28 +129,26 @@ tbody.fx tr{cursor:pointer}tbody.fx tr:hover td,tbody.fx tr.on td{background:var
     </div>
     <section id="p-cmp">
       <div class="row">
-        <input class="inp" id="co" list="apts" placeholder="Origem" aria-label="Origem (ICAO)" maxlength="4" autocomplete="off">
+        <span class="cb"><input class="inp" id="co" placeholder="Origem" aria-label="Origem: código ICAO, IATA ou cidade" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="co-s"><div class="sugg" id="co-s" role="listbox" hidden></div></span>
         <button class="sw" id="swap" aria-label="Inverter origem e destino">⇄</button>
-        <input class="inp" id="cd" list="apts" placeholder="Destino" aria-label="Destino (ICAO)" maxlength="4" autocomplete="off">
+        <span class="cb"><input class="inp" id="cd" placeholder="Destino" aria-label="Destino: código ICAO, IATA ou cidade" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="cd-s"><div class="sugg" id="cd-s" role="listbox" hidden></div></span>
       </div>
-      <datalist id="apts"></datalist>
+      <p class="hint" style="margin-top:6px">Digite ICAO (SBGR), IATA (GRU) ou cidade (São Paulo).</p>
       <p class="hint" id="ph">Trechos operados por mais de uma companhia:</p>
       <div class="pairs" id="pairs"></div>
       <div id="cmp"></div>
-      <div class="detail dt" id="cmpDet"></div>
     </section>
     <section id="p-apt" hidden>
       <div class="row">
-        <input class="inp" id="ap" list="apts" placeholder="Aeroporto (ICAO)" aria-label="Aeroporto (ICAO)" maxlength="4" autocomplete="off">
+        <span class="cb"><input class="inp" id="ap" placeholder="ICAO, IATA ou cidade" aria-label="Aeroporto: código ICAO, IATA ou cidade" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="ap-s"><div class="sugg" id="ap-s" role="listbox" hidden></div></span>
         <div class="seg" role="group" aria-label="Sentido"><button id="dirA" aria-pressed="true">Chegadas</button><button id="dirD" aria-pressed="false">Partidas</button></div>
       </div>
       <p class="hint">Aeroportos mais movimentados:</p>
       <div class="pairs" id="topApts"></div>
       <div id="apt"></div>
-      <div class="detail dt" id="aptDet"></div>
     </section>
     <section id="p-voo" hidden>
-      <input class="inp" id="q" type="search" placeholder="Voo, aeroporto, fixo ou aerovia" aria-label="Buscar" autocomplete="off" style="width:100%;text-transform:none">
+      <input class="inp" id="q" type="search" placeholder="Voo, ICAO, IATA, cidade, fixo ou aerovia" aria-label="Buscar" autocomplete="off" style="width:100%;text-transform:none">
       <div class="row" style="margin-top:8px">
         <select id="ft" aria-label="Aeronave"><option value="">Todas as aeronaves</option></select>
         <select id="fd" aria-label="Dia da semana"><option value="">Todos os dias</option><option value="0">Segunda</option><option value="1">Terça</option><option value="2">Quarta</option><option value="3">Quinta</option><option value="4">Sexta</option><option value="5">Sábado</option><option value="6">Domingo</option></select>
@@ -174,7 +178,7 @@ const DAYS=['seg','ter','qua','qui','sex','sáb','dom'];
 const NAMES={SBSP:'São Paulo/Congonhas',SBGR:'São Paulo/Guarulhos',SBKP:'Campinas',SBGL:'Rio/Galeão',SBRJ:'Rio/Santos Dumont',SBCF:'Belo Horizonte/Confins',SBBR:'Brasília'};
 const ALL=['AZU','ACN','GLO','TAM'],FULL={AZU:'Azul',ACN:'Azul Conecta',GLO:'Gol',TAM:'LATAM'};
 let D,B,RP=[],NAMESET=[],POINTNAMES=new Set();
-let focusApt=null,on=new Set(),shown=[],limit=200,sel=null,hi=[],hiPt=null,cmpKey=null,aptKey=null,aptDir='A',cmpOpen=new Set(),aptOpen=new Set(),aptOrg=null,G=[];
+const APM_ALL={};let focusApt=null,curTab='cmp',backTab=null,PLACES=[],on=new Set(),shown=[],limit=200,sel=null,hi=[],hiPt=null,cmpKey=null,aptKey=null,aptDir='A',cmpOpen=new Set(),aptOpen=new Set(),aptOrg=null,G=[];
 const cv=$('cv'),ctx=cv.getContext('2d');
 const view={lon:-50,lat:-14,k:14};const COS=Math.cos(14*Math.PI/180);
 let W=0,H=0,dpr=1,col={};
@@ -219,7 +223,7 @@ function render(){raf=0;if(!D)return;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillS
     ctx.beginPath();pts.forEach((p,i)=>{const[x,y]=px(p.lat,p.lon);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()}
   // aeroportos
   const used=[];ctx.textBaseline='middle';
-  const hiA=new Set(hi.filter(h=>!h.weak).flatMap(h=>[D.routes[h.ri].o,D.routes[h.ri].d]));if(focusApt)hiA.add(focusApt);
+  const hiA=new Set(hi.filter(h=>!h.weak).flatMap(h=>[D.routes[h.ri].o,D.routes[h.ri].d]));if(focusApt)for(const c of focusApt)hiA.add(c);
   const weakA=new Set(hi.filter(h=>h.weak).flatMap(h=>[D.routes[h.ri].o,D.routes[h.ri].d]));
   const ap=Object.entries(D.airports).filter(([c])=>APM[c]||hiA.has(c)||weakA.has(c)).sort((a,b)=>(APM[b[0]]||0)-(APM[a[0]]||0));
   ap.forEach(([c,a],i)=>{const[x,y]=px(a[0],a[1]);if(x<-20||y<-20||x>W+20||y>H+20)return;const m=APM[c]||0,r=Math.min(7,2+Math.sqrt(m)/4);
@@ -279,34 +283,70 @@ $('cias').addEventListener('click',e=>{const b=e.target.closest('.cia');if(!b||b
   rebuildNet();renderCias();renderPairs();renderTopApts();if(cmpKey)compare();if(aptKey)airport();filter();renderSum();draw()});
 // abas
 const TABS={cmp:'p-cmp',apt:'p-apt',cia:'p-cia',voo:'p-voo',sum:'p-sum'};
-for(const t in TABS)$('t-'+t).onclick=()=>{for(const u in TABS){$('t-'+u).setAttribute('aria-selected',u===t);$(TABS[u]).hidden=u!==t}
-  if(t==='cmp'&&cmpKey)compare();else if(t==='apt'){if(!aptKey)$('ap').value=topApts()[0];airport()}else if(t==='cia')company();else if(t==='voo'&&sel)select(sel,false);else if(t==='sum'){hi=[];focusApt=null;draw();fit(Object.keys(APM).map(c=>({lat:D.airports[c][0],lon:D.airports[c][1]})))}};
+for(const t in TABS)$('t-'+t).onclick=()=>{curTab=t;for(const u in TABS){$('t-'+u).setAttribute('aria-selected',u===t);$(TABS[u]).hidden=u!==t}
+  if(t==='cmp'&&cmpKey)compare();else if(t==='apt'){if(!aptKey)setPlace($('ap'),[topApts()[0]]);airport()}else if(t==='cia')company();else if(t==='voo'&&sel)select(sel,false);else if(t==='sum'){hi=[];focusApt=null;draw();fit(Object.keys(APM).map(c=>({lat:D.airports[c][0],lon:D.airports[c][1]})))}};
+// ---- busca de aeroportos por ICAO, IATA ou cidade
+const norm=t=>String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+const iata=c=>D.airports[c]?.[4]||'';
+const METRO={SAO:['São Paulo',['SBGR','SBSP','SBKP']],RIO:['Rio de Janeiro',['SBGL','SBRJ']],BHZ:['Belo Horizonte',['SBCF','SBBH']]};
+function buildPlaces(){PLACES=[];const byCity={};
+  for(const[c,a]of Object.entries(D.airports)){PLACES.push({kind:'apt',codes:[c],short:`${a[4]?a[4]+' · ':''}${c}`,label:`${a[4]?a[4]+' · ':''}${c}`,sub:`${a[3]} — ${a[2]}`,keys:[c.toLowerCase(),(a[4]||'').toLowerCase()],names:[norm(a[3]),norm(a[2]),norm(city(c))]});
+    (byCity[norm(a[3])]??={name:a[3],codes:[]}).codes.push(c)}
+  for(const v of Object.values(byCity))if(v.codes.length>1){const nm=v.name.replace(/ De /g,' de ');v.codes.sort((x,y)=>(APM_ALL[y]||0)-(APM_ALL[x]||0));
+    PLACES.push({kind:'city',codes:v.codes,short:`${nm} (todos)`,label:`${nm} — todos os aeroportos`,sub:v.codes.map(c=>`${iata(c)||c} ${NAMES[c]?NAMES[c].split('/').pop():''}`.trim()).join(' · '),keys:[],names:[norm(nm)]})}
+  for(const[k,[nm,cs]]of Object.entries(METRO)){const ok=cs.filter(c=>D.airports[c]);if(ok.length>1&&!PLACES.some(p=>p.kind==='city'&&p.codes.length===ok.length&&p.codes.every(c=>ok.includes(c))))
+    PLACES.push({kind:'metro',codes:ok,short:`${k} (${nm})`,label:`${k} — ${nm}, área metropolitana`,sub:ok.map(c=>iata(c)||c).join(' · '),keys:[k.toLowerCase()],names:[norm(nm)+' area metropolitana']})}}
+function searchPlaces(q){const n=norm(q);if(!n)return[];const out=[];
+  for(const p of PLACES){let sc=99;
+    if(p.keys.includes(n))sc=p.kind==='apt'?0:1;
+    else if(p.names.some(x=>x===n))sc=p.kind==='apt'?3:2;
+    else if(p.names.some(x=>x.startsWith(n))||p.keys.some(k=>k&&k.startsWith(n)))sc=p.kind==='apt'?5:4;
+    else if(n.length>2&&p.names.some(x=>x.split(/[ \-\/()]+/).some(w=>w.startsWith(n))))sc=p.kind==='apt'?7:6;
+    if(sc<99)out.push([sc,-(p.codes.reduce((s,c)=>s+(APM_ALL[c]||0),0)),p])}
+  return out.sort((a,b)=>a[0]-b[0]||a[1]-b[1]).slice(0,10).map(x=>x[2])}
+function setPlace(inp,codes,label){inp.dataset.codes=codes.join(',');inp.value=label||(codes.length===1?`${iata(codes[0])?iata(codes[0])+' · ':''}${codes[0]}`:PLACES.find(p=>p.codes.join()===codes.join())?.short||codes.join(', '))}
+function placeOf(inp){if(inp.dataset.codes)return inp.dataset.codes.split(',');const r=searchPlaces(inp.value);return r.length?r[0].codes:[]}
+function placeName(codes){if(codes.length===1)return `${city(codes[0])} (${iata(codes[0])||codes[0]})`;const p=PLACES.find(x=>x.kind!=='apt'&&x.codes.length===codes.length&&x.codes.every(c=>codes.includes(c)));return (p?p.short.replace(/ \(todos\)$/,''):codes.join(', '))+' — '+codes.map(c=>iata(c)||c).join(', ')}
+function combo(inp,onPick){const box=$(inp.id+'-s');let items=[],act=-1;
+  const close=()=>{box.hidden=true;inp.setAttribute('aria-expanded','false');act=-1};
+  const show=()=>{items=searchPlaces(inp.value);if(!items.length){close();return}act=-1;
+    box.innerHTML=items.map((p,i)=>`<button type="button" role="option" class="${p.kind!=='apt'?'grp':''}" data-i="${i}"><b>${esc(p.label)}</b><small>${esc(p.sub)}</small></button>`).join('');box.hidden=false;inp.setAttribute('aria-expanded','true')};
+  const pick=p=>{setPlace(inp,p.codes,p.short);close();onPick()};
+  inp.addEventListener('input',()=>{inp.dataset.codes='';show()});
+  inp.addEventListener('focus',()=>{if(!inp.dataset.codes&&inp.value)show()});
+  inp.addEventListener('keydown',e=>{if(box.hidden&&e.key!=='Enter')return;const bs=box.querySelectorAll('button');
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();act=(act+(e.key==='ArrowDown'?1:-1)+bs.length)%bs.length;bs.forEach((b,i)=>b.classList.toggle('act',i===act));bs[act]?.scrollIntoView({block:'nearest'})}
+    else if(e.key==='Enter'){e.preventDefault();const r=items.length&&!box.hidden?items[Math.max(0,act)]:searchPlaces(inp.value)[0];if(r)pick(r)}
+    else if(e.key==='Escape')close()});
+  box.addEventListener('mousedown',e=>e.preventDefault());
+  box.addEventListener('click',e=>{const b=e.target.closest('button');if(b)pick(items[+b.dataset.i])});
+  inp.addEventListener('blur',()=>setTimeout(close,150))}
 // comparar trecho
 function pairStats(){const m=new Map();for(const f of D.flights){if(!on.has(f[0]))continue;const k=f[3]+'-'+f[4];if(!m.has(k))m.set(k,{k,c:new Set(),f:0});const v=m.get(k);v.c.add(f[0]);v.f+=f[13]}return m}
 function renderPairs(){const m=[...pairStats().values()].filter(v=>v.c.size>1).sort((a,b)=>b.c.size-a.c.size||b.f-a.f).slice(0,10);
   const top=m.length?m:[...pairStats().values()].sort((a,b)=>b.f-a.f).slice(0,10);
   $('ph').textContent=m.length?'Trechos operados por mais de uma companhia:':'Trechos mais voados:';
   $('pairs').innerHTML=top.map(v=>`<button data-k="${v.k}">${v.k.replace('-',' → ')}</button>`).join('')}
-$('pairs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const[o,d]=b.dataset.k.split('-');$('co').value=o;$('cd').value=d;compare()});
-$('swap').onclick=()=>{const a=$('co').value;$('co').value=$('cd').value;$('cd').value=a;compare()};
-for(const id of['co','cd'])$(id).addEventListener('input',()=>{const o=$('co').value.toUpperCase(),d=$('cd').value.toUpperCase();if(o.length===4&&d.length===4)compare()});
-function compare(){focusApt=null;const o=$('co').value.toUpperCase().trim(),d=$('cd').value.toUpperCase().trim();if(cmpKey!==o+'-'+d)$('cmpDet').innerHTML='';cmpKey=o+'-'+d;cmpPt=null;
-  const fl=D.flights.filter(f=>on.has(f[0])&&f[3]===o&&f[4]===d);
-  if(!fl.length){hi=[];draw();$('cmp').innerHTML=`<p class="hint">Nenhuma companhia selecionada tem ${esc(o)} → ${esc(d)} no RPL desta semana.</p>`;return}
+$('pairs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const[o,d]=b.dataset.k.split('-');setPlace($('co'),[o]);setPlace($('cd'),[d]);compare()});
+$('swap').onclick=()=>{const a=[$('co').value,$('co').dataset.codes];$('co').value=$('cd').value;$('co').dataset.codes=$('cd').dataset.codes;$('cd').value=a[0];$('cd').dataset.codes=a[1];compare()};
+combo($('co'),()=>{if($('cd').value)compare();else $('cd').focus()});combo($('cd'),()=>{if($('co').value)compare()});
+function compare(){focusApt=null;const O=placeOf($('co')),Dd=placeOf($('cd'));if(!O.length||!Dd.length)return;const o=O.join('+'),d=Dd.join('+');cmpKey=o+'-'+d;cmpPt=null;
+  const multi=O.length>1||Dd.length>1,fl=D.flights.filter(f=>on.has(f[0])&&O.includes(f[3])&&Dd.includes(f[4]));
+  if(!fl.length){hi=[];draw();$('cmp').innerHTML=`<p class="hint">Nenhuma companhia selecionada voa de ${esc(placeName(O))} para ${esc(placeName(Dd))} no RPL desta semana.</p>`;return}
   const by={};for(const f of fl){(by[f[0]]??={})[f[12]]??=[];by[f[0]][f[12]].push(f)}
-  hi=[];let html='';const gc=D.routes[fl[0][12]].gc;
+  hi=[];let html='';const gcs=[...new Set(fl.map(f=>D.routes[f[12]].gc))],gc=gcs.length>1?`${fmtN(Math.min(...gcs))}–${fmtN(Math.max(...gcs))}`:fmtN(gcs[0]);
   for(const c of ALL){if(!by[c])continue;const vars=Object.entries(by[c]).map(([ri,fs])=>({ri:+ri,fs,w:fs.reduce((s,f)=>s+f[13],0)})).sort((a,b)=>b.w-a.w);
     const tot=vars.reduce((s,v)=>s+v.w,0);vars.forEach((v,i)=>hi.push({cia:c,ri:v.ri,weak:i>0}));
     const open=cmpOpen.has(c);
     html+=`<div class="card"><button class="ch" data-c="${c}" aria-expanded="${open}"><i style="background:var(--${c})"></i>${FULL[c]}<span>${tot} voos/sem · ${vars.length} ${vars.length>1?'rotas':'rota'}</span></button>`+
       vars.map((v,i)=>{const r=D.routes[v.ri],fls=[...new Set(v.fs.map(f=>'FL'+f[7]))].join('/'),eet=v.fs[0][6],ex=r.gc?Math.round((r.nm/r.gc-1)*100):0;
         const same=ALL.filter(o=>o!==c&&by[o]&&by[o][v.ri]).map(o=>FULL[o]);
-        return `<button class="var${i===0?' on':''}" data-c="${c}" data-ri="${v.ri}"><code>${vars.length>1?'<span style="color:var(--mute)">rota '+(i+1)+':</span> ':''}${esc(r.raw)}</code><small>${same.length?'<b>Rota idêntica à de '+same.join(' e ')+'.</b> ':''}${v.w} voos/sem · ${fls} · ${fmtN(r.nm)} NM (+${ex}% sobre a reta) · ${r.p.length} fixos · EET ${dur(eet)} · ${[...new Set(v.fs.map(f=>f[2]))].join(', ')}</small></button>`}).join('')+
-      `<div class="sub2" ${open?'':'hidden'}><p class="hint">Voos da ${FULL[c]} neste trecho — toque para ver o plano:</p>${flRows(groupFl(vars.flatMap(v=>v.fs)),vars.map(v=>v.ri))}</div></div>`}
+        return `<button class="var${i===0?' on':''}" data-c="${c}" data-ri="${v.ri}"><code>${vars.length>1?'<span style="color:var(--mute)">rota '+(i+1)+':</span> ':''}${multi?'<b>'+r.o+' → '+r.d+'</b> ':''}${esc(r.raw)}</code><small>${same.length?'<b>Rota idêntica à de '+same.join(' e ')+'.</b> ':''}${v.w} voos/sem · ${fls} · ${fmtN(r.nm)} NM (+${ex}% sobre a reta) · ${r.p.length} fixos · EET ${dur(eet)} · ${[...new Set(v.fs.map(f=>f[2]))].join(', ')}</small></button>`}).join('')+
+      `<div class="sub2" ${open?'':'hidden'}><p class="hint">Voos da ${FULL[c]} neste trecho — toque para abrir o plano na aba Voos:</p>${flRows(groupFl(vars.flatMap(v=>v.fs)),vars.map(v=>v.ri))}</div></div>`}
   const best=Object.entries(by).map(([c,v])=>Math.min(...Object.keys(v).map(ri=>D.routes[ri].nm)));
-  $('cmp').innerHTML=`<p class="hint"><b>${esc(city(o))} → ${esc(city(d))}</b> · distância em linha reta ${fmtN(gc)} NM. Toque numa companhia para ver os voos dela; numa rota, para destacá-la no mapa.</p><div class="btns" style="margin-bottom:4px"><button class="btn" id="dgT">Baixar GPX do trecho</button></div>`+heat(fl)+html;
-  const items=[];for(const c of ALL){if(!by[c])continue;Object.entries(by[c]).map(([ri,fs])=>({ri:+ri,fs,w:fs.reduce((s,f)=>s+f[13],0)})).sort((a,b)=>b.w-a.w).forEach((v,i,arr)=>items.push({ri:v.ri,name:`${FULL[c]} ${o}-${d}${arr.length>1?' rota '+(i+1):''}`,desc:`${v.w} voos/sem · FL${[...new Set(v.fs.map(f=>f[7]))].join('/')} · ${D.routes[v.ri].raw}`}))}
-  $('dgT').onclick=e=>download(`${o}-${d}_rotas.gpx`,gpxDoc(`${o}-${d} — rotas por companhia`,items),e.currentTarget,'Baixar GPX do trecho');
+  $('cmp').innerHTML=`<p class="hint"><b>${esc(placeName(O))} → ${esc(placeName(Dd))}</b> · distância em linha reta ${gc} NM${multi?` · ${new Set(fl.map(f=>f[3]+f[4])).size} pares de aeroportos`:''}. Toque numa companhia para ver os voos dela; numa rota, para destacá-la no mapa.</p><div class="btns" style="margin-bottom:4px"><button class="btn" id="dgT">Baixar GPX do trecho</button></div>`+heat(fl)+html;
+  const items=[];for(const c of ALL){if(!by[c])continue;Object.entries(by[c]).map(([ri,fs])=>({ri:+ri,fs,w:fs.reduce((s,f)=>s+f[13],0)})).sort((a,b)=>b.w-a.w).forEach((v,i,arr)=>items.push({ri:v.ri,name:`${FULL[c]} ${D.routes[v.ri].o}-${D.routes[v.ri].d}${arr.length>1?' rota '+(i+1):''}`,desc:`${v.w} voos/sem · FL${[...new Set(v.fs.map(f=>f[7]))].join('/')} · ${D.routes[v.ri].raw}`}))}
+  $('dgT').onclick=e=>download(`${O.map(iata).join('+')}-${Dd.map(iata).join('+')}_rotas.gpx`,gpxDoc(`${placeName(O)} → ${placeName(Dd)} — rotas por companhia`,items),e.currentTarget,'Baixar GPX do trecho');
   $('cmp').querySelectorAll('.var').forEach(b=>b.onclick=()=>{const c=b.dataset.c,ri=+b.dataset.ri;$('cmp').querySelectorAll(`.var[data-c="${c}"]`).forEach(x=>x.classList.toggle('on',x===b));
     hi=hi.map(h=>h.cia===c?{...h,weak:h.ri!==ri}:h);hi.sort((a,b)=>b.weak-a.weak);draw()});
   hi.sort((a,b)=>b.weak-a.weak);fit(hi.flatMap(h=>RP[h.ri]))}
@@ -362,17 +402,18 @@ function company(){renderCiaSel();const c=ciaCur,fs=D.flights.filter(f=>f[0]===c
   fit(aps.map(([k])=>({lat:D.airports[k][0],lon:D.airports[k][1]})))}
 $('ciaBody').addEventListener('click',e=>{const b=e.target.closest('.br[data-go]');if(!b)return;const[t,k]=b.dataset.go.split(':');
   if(!on.has(ciaCur)){on.add(ciaCur);rebuildNet();renderCias()}
-  if(t==='apt'){$('ap').value=k;aptOrg=null;aptOpen.add(ciaCur);$('t-apt').click();airport()}else{const[o,d]=k.split('-');$('co').value=o;$('cd').value=d;cmpOpen.add(ciaCur);$('t-cmp').click();compare()}});
+  if(t==='apt'){setPlace($('ap'),[k]);aptOrg=null;aptOpen.add(ciaCur);$('t-apt').click()}else{const[o,d]=k.split('-');setPlace($('co'),[o]);setPlace($('cd'),[d]);cmpOpen.add(ciaCur);$('t-cmp').click()}});
 // voos
 function filter(){const q=$('q').value.trim().toUpperCase(),t=$('ft').value,d=$('fd').value;
   const terms=q.split(/\s+/).filter(Boolean);
-  shown=D.flights.filter(f=>on.has(f[0])&&(!t||f[2]===t)&&(d===''||f[8+1][d]!=='0')&&terms.every(s=>f[1].includes(s)||f[3].startsWith(s)||f[4].startsWith(s)||NAMESET[f[12]].has(s)));
+  const cityQ=norm(q);
+  shown=D.flights.filter(f=>on.has(f[0])&&(!t||f[2]===t)&&(d===''||f[8+1][d]!=='0')&&(terms.every(s=>f[1].includes(s)||f[3].startsWith(s)||f[4].startsWith(s)||iata(f[3])===s||iata(f[4])===s||NAMESET[f[12]].has(s))||(cityQ.length>2&&(norm(city(f[3])).startsWith(cityQ)||norm(city(f[4])).startsWith(cityQ)||norm(D.airports[f[3]][3]).startsWith(cityQ)||norm(D.airports[f[4]][3]).startsWith(cityQ)))));
   limit=200;renderList()}
 function renderList(){const n=new Set(shown.map(f=>f[1])).size;$('count').textContent=`${fmtN(shown.length)} planos · ${fmtN(n)} voos`;
   $('list').innerHTML=shown.slice(0,limit).map(f=>`<div class="fl" role="option" tabindex="0" data-i="${f.i}" aria-selected="${sel===f}"><b><i style="background:var(--${f[0]})"></i>${f[1]}</b><span class="od">${f[3]} → ${f[4]}</span><span class="t">${hhmm(f[5])}Z</span><span class="s">${FULL[f[0]]} · ${f[2]} · ${dias(f[9])} · ${dmy(f[10])}–${dmy(f[11])}</span></div>`).join('')||'<p class="hint">Nenhum plano encontrado.</p>';
   $('more').hidden=shown.length<=limit}
 $('more').onclick=()=>{limit+=200;renderList()};
-$('list').addEventListener('click',e=>{const el=e.target.closest('.fl');if(el)select(D.flights[+el.dataset.i],true)});
+$('list').addEventListener('click',e=>{const el=e.target.closest('.fl');if(el){backTab=null;select(D.flights[+el.dataset.i],true)}});
 $('list').addEventListener('keydown',e=>{const el=e.target.closest('.fl');if(el&&(e.key==='Enter'||e.key===' ')){e.preventDefault();select(D.flights[+el.dataset.i],true)}});
 for(const id of['q','ft','fd'])$(id).addEventListener('input',filter);
 function markRow(){document.querySelectorAll('.fx tr').forEach(tr=>tr.classList.toggle('on',+tr.dataset.i===hiPt))}
@@ -385,8 +426,14 @@ function gpx(f){return gpxDoc(`${f[1]} ${f[3]}-${f[4]}`,[{ri:f[12],name:`${f[1]}
 function download(name,text,btn,label){try{const url=URL.createObjectURL(new Blob([text],{type:'application/gpx+xml'}));const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);btn.textContent='Baixado'}
   catch(e){btn.textContent='Download bloqueado — use Copiar GPX'}setTimeout(()=>btn.textContent=label,2200)}
 function select(f,scroll){focusApt=null;sel=f;hi=[{cia:f[0],ri:f[12]}];
-  document.querySelectorAll('#list .fl').forEach(el=>el.setAttribute('aria-selected',D.flights[+el.dataset.i]===f));
-  renderDetail(f,$('detail'));fit(RP[f[12]]);if(scroll&&innerWidth<=900)window.scrollTo({top:0,behavior:'smooth'})}
+  document.querySelectorAll('#list .fl').forEach(el=>el.setAttribute('aria-selected',+el.dataset.i===f.i));
+  renderDetail(f,$('detail'));
+  if(backTab){const T={cmp:'Trecho',apt:'Aeroporto',cia:'Companhia',sum:'Resumo'};const b=document.createElement('button');b.className='back';b.textContent='← Voltar para '+T[backTab];
+    b.onclick=()=>{const t=backTab;backTab=null;$('t-'+t).click()};$('detail').prepend(b)}
+  fit(RP[f[12]]);if(scroll&&innerWidth<=900)window.scrollTo({top:0,behavior:'smooth'})}
+// voo escolhido em outra aba: abre na aba Voos, com a busca filtrada nesse voo
+function goFlight(g){backTab=curTab;$('q').value=g[1];$('ft').value='';$('fd').value='';filter();sel=g;$('t-voo').click();
+  requestAnimationFrame(()=>$('detail').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}))}
 // plano de voo detalhado, em qualquer aba
 function renderDetail(f,el){cmpPt=null;hiPt=null;$('tip').style.display='none';const pts=RP[f[12]],r=D.routes[f[12]];
   let acc=0;const rows=pts.map((p,i)=>{const leg=i?nm([pts[i-1].lat,pts[i-1].lon],[p.lat,p.lon]):0;acc+=leg;const s=p.k==='A'?'●':{F:'▲',V:'⬡',N:'◎',C:'✕'}[p.k];
@@ -400,11 +447,8 @@ function renderDetail(f,el){cmpPt=null;hiPt=null;$('tip').style.display='none';c
   const cp=(cls,txt,label)=>{const b=el.querySelector(cls);b.onclick=async()=>{try{await navigator.clipboard.writeText(txt);b.textContent='Copiado'}catch(e){b.textContent='Não foi possível copiar'}setTimeout(()=>b.textContent=label,1600)}};
   cp('.b-cp',`${f[3]} ${r.raw} ${f[4]}`,'Copiar rota');cp('.b-cg',gpx(f),'Copiar GPX');
   {const b=el.querySelector('.b-dg');b.onclick=()=>download(`${f[1]}_${f[3]}-${f[4]}.gpx`,gpx(f),b,'Baixar GPX')}
-  el.querySelector('.b-vc').onclick=()=>{$('co').value=f[3];$('cd').value=f[4];$('t-cmp').click();compare()};
+  el.querySelector('.b-vc').onclick=()=>{setPlace($('co'),[f[3]]);setPlace($('cd'),[f[4]]);backTab=null;$('t-cmp').click()};
   el.querySelector('.fx').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;hiPt=+tr.dataset.i;const p=pts[hiPt];view.lat=p.lat;view.lon=p.lon;if(view.k<60)view.k=60;markRow();draw();if(innerWidth<=900)$('mapwrap').scrollIntoView({behavior:'smooth'})})}
-// abre o plano de um voo listado nas abas Trecho/Aeroporto: a rota dele fica em destaque e as demais esmaecem
-function openDetail(f,el){hi=hi.filter(h=>!h.det).map(h=>({...h,weak:true}));hi.push({cia:f[0],ri:f[12],det:true});
-  renderDetail(f,el);fit(RP[f[12]]);el.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})}
 // agrupa planos iguais (mesmo voo, horário, rota, equipamento e nível), juntando dias e validade
 const ymd=s=>s==='UFN'?'999999':s.slice(4)+s.slice(2,4)+s.slice(0,2);
 function groupFl(fs){const m=new Map();
@@ -414,27 +458,27 @@ function groupFl(fs){const m=new Map();
   return [...m.values()].sort((a,b)=>a[5].localeCompare(b[5])||a[1].localeCompare(b[1]))}
 function flRows(gs,vars){return gs.map(g=>{G.push(g);const v=vars&&vars.length>1?vars.indexOf(g[12])+1:0;
   return `<div class="fl" role="button" tabindex="0" data-g="${G.length-1}"><b><i style="background:var(--${g[0]})"></i>${g[1]}</b><span class="od">${g[3]} → ${g[4]}</span><span class="t">${hhmm(g[5])}Z</span><span class="s">${g[2]} · FL${g[7]} · ${dias(g[9])||'—'}${v?' · rota '+v:''}${g.n>1?' · '+g.n+' planos':''}</span></div>`}).join('')||'<p class="hint">Nenhum voo.</p>'}
-function bindList(box,det,onHead,onOrg){
+function bindList(box,onHead,onOrg){
   box.addEventListener('click',e=>{const ch=e.target.closest('.ch');if(ch){const open=ch.getAttribute('aria-expanded')!=='true';ch.setAttribute('aria-expanded',open);ch.parentElement.querySelector('.sub2').hidden=!open;onHead(ch.dataset.c,open);return}
     const o=e.target.closest('.org');if(o&&onOrg){onOrg(o.dataset.k);return}
-    const fl=e.target.closest('.fl');if(fl){box.querySelectorAll('.fl').forEach(x=>x.setAttribute('aria-selected',x===fl));openDetail(G[+fl.dataset.g],det)}});
+    const fl=e.target.closest('.fl');if(fl)goFlight(G[+fl.dataset.g])});
   box.addEventListener('keydown',e=>{const fl=e.target.closest('.fl');if(fl&&(e.key==='Enter'||e.key===' ')){e.preventDefault();fl.click()}})}
-bindList($('cmp'),$('cmpDet'),(c,open)=>open?cmpOpen.add(c):cmpOpen.delete(c));
+bindList($('cmp'),(c,open)=>open?cmpOpen.add(c):cmpOpen.delete(c));
 // aeroporto: companhias que chegam (ou saem) e, por companhia, as origens (ou destinos)
 function topApts(){return Object.entries(APM).sort((a,b)=>b[1]-a[1]).slice(0,10).map(x=>x[0])}
 function renderTopApts(){$('topApts').innerHTML=topApts().map(c=>`<button data-a="${c}">${c}</button>`).join('')}
-$('topApts').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$('ap').value=b.dataset.a;aptOrg=null;airport()});
-$('ap').addEventListener('input',()=>{if($('ap').value.trim().length===4){aptOrg=null;airport()}});
+$('topApts').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;setPlace($('ap'),[b.dataset.a]);aptOrg=null;airport()});
+combo($('ap'),()=>{aptOrg=null;airport()});
 $('dirA').onclick=()=>{aptDir='A';aptOrg=null;airport()};$('dirD').onclick=()=>{aptDir='D';aptOrg=null;airport()};
-function airport(refit=true){const a=$('ap').value.toUpperCase().trim(),arr=aptDir==='A';focusApt=D.airports[a]?a:null;
-  if(aptKey!==a+aptDir)$('aptDet').innerHTML='';aptKey=a+aptDir;cmpPt=null;
+function airport(refit=true){const A=placeOf($('ap')),a=A.join('+'),arr=aptDir==='A';if(!A.length)return;focusApt=new Set(A);
+  aptKey=a+aptDir;cmpPt=null;
   $('dirA').setAttribute('aria-pressed',arr);$('dirD').setAttribute('aria-pressed',!arr);
-  const fl=D.flights.filter(f=>on.has(f[0])&&(arr?f[4]:f[3])===a);
-  if(!fl.length){hi=[];draw();$('apt').innerHTML=`<p class="hint">Nenhum voo das companhias selecionadas ${arr?'chega a':'sai de'} ${esc(a)} no RPL desta semana.</p>`;return}
+  const fl=D.flights.filter(f=>on.has(f[0])&&A.includes(arr?f[4]:f[3]));
+  if(!fl.length){hi=[];draw();$('apt').innerHTML=`<p class="hint">Nenhum voo das companhias selecionadas ${arr?'chega a':'sai de'} ${esc(placeName(A))} no RPL desta semana.</p>`;return}
   const by={};for(const f of fl){const o=arr?f[3]:f[4];((by[f[0]]??={})[o]??=[]).push(f)}
   const tot=fl.reduce((s,f)=>s+f[13],0),others=new Set(fl.map(f=>arr?f[3]:f[4])),nc=Object.keys(by).length;
   const lbl=n=>arr?(n>1?'origens':'origem'):(n>1?'destinos':'destino');
-  let html=`<p class="hint"><b>${esc(a)} — ${esc(city(a))}</b> · ${fmtN(tot)} voos/sem ${arr?'chegando de':'saindo para'} ${others.size} aeroportos, por ${nc} ${nc>1?'companhias':'companhia'}. Toque numa companhia para ver ${arr?'as origens':'os destinos'}, e num aeroporto para ver os voos.</p>`;
+  let html=`<p class="hint"><b>${esc(placeName(A))}</b>${A.length>1?' · '+A.map(c=>`${iata(c)||c} ${fmtN(fl.filter(f=>(arr?f[4]:f[3])===c).reduce((s,f)=>s+f[13],0))}`).join(', ')+' voos/sem':''} · ${fmtN(tot)} voos/sem ${arr?'chegando de':'saindo para'} ${others.size} aeroportos, por ${nc} ${nc>1?'companhias':'companhia'}. Toque numa companhia para ver ${arr?'as origens':'os destinos'}, e num aeroporto para ver os voos.</p>`;
   hi=[];
   for(const c of ALL){if(!by[c])continue;
     const os=Object.entries(by[c]).map(([o,fs])=>({o,fs,w:fs.reduce((s,f)=>s+f[13],0),rs:[...new Set(fs.map(f=>f[12]))]})).sort((x,y)=>y.w-x.w);
@@ -445,8 +489,8 @@ function airport(refit=true){const a=$('ap').value.toUpperCase().trim(),arr=aptD
         return `<button class="org${isOn?' on':''}" data-k="${k}" aria-expanded="${isOn}"><b>${x.o}</b><span>${esc(city(x.o))}</span><em>${x.w} voos/sem${x.rs.length>1?' · '+x.rs.length+' rotas':''}</em></button>`+(isOn?flRows(groupFl(x.fs),x.rs):'')}).join('')+'</div></div>'}
   $('apt').innerHTML=html;hi.sort((x,y)=>(y.weak?1:0)-(x.weak?1:0));
   const strong=hi.filter(h=>!h.weak);
-  if(refit)fit(strong.length?strong.flatMap(h=>RP[h.ri]):[...others,a].map(c=>({lat:D.airports[c][0],lon:D.airports[c][1]})));else draw()}
-bindList($('apt'),$('aptDet'),(c,open)=>open?aptOpen.add(c):aptOpen.delete(c),k=>{aptOrg=aptOrg===k?null:k;if(aptOrg)aptOpen.add(k.split('|')[0]);airport(true)});
+  if(refit)fit(strong.length?strong.flatMap(h=>RP[h.ri]):[...others,...A].map(c=>({lat:D.airports[c][0],lon:D.airports[c][1]})));else draw()}
+bindList($('apt'),(c,open)=>open?aptOpen.add(c):aptOpen.delete(c),k=>{aptOrg=aptOrg===k?null:k;if(aptOrg)aptOpen.add(k.split('|')[0]);airport(true)});
 // resumo
 function renderSum(){const S={};for(const c of ALL)if(D.cias[c])S[c]={pl:0,wk:0,ap:new Set(),pr:new Set(),rt:new Set(),nm:0,gc:0,w:0,apm:{}};
   for(const f of D.flights){const s=S[f[0]];if(!s)continue;const r=D.routes[f[12]];s.pl++;s.wk+=f[13];s.ap.add(f[3]);s.ap.add(f[4]);s.pr.add(f[3]+'-'+f[4]);s.rt.add(f[12]);s.nm+=r.nm*f[13];s.gc+=r.gc*f[13];s.apm[f[3]]=(s.apm[f[3]]||0)+f[13]}
@@ -462,10 +506,10 @@ Promise.all([fetch('data/data.json').then(r=>r.json()),fetch('data/base.json').t
   $('srcs').textContent=Object.keys(d.cias).map(c=>FULL[c]).join(', ');$('ed').textContent=d.meta.edicao_txt||d.meta.edicao;$('airac').textContent=d.meta.airac;$('gen').textContent=(d.meta.gerado_em||'').replace('T',' ').replace('Z',' UTC');
   const nc=Object.keys(d.cias).length;$('meta').textContent=`${nc} ${nc>1?'companhias':'companhia'} · ${fmtN(d.flights.length)} planos · ${fmtN(d.routes.length)} rotas distintas · ${Object.keys(d.airports).length} aeroportos`;
   $('ft').innerHTML+=[...new Set(d.flights.map(f=>f[2]))].sort().map(t=>`<option>${t}</option>`).join('');
-  $('apts').innerHTML=Object.keys(d.airports).sort().map(c=>`<option value="${c}">${esc(city(c))}</option>`).join('');
+  for(const f of d.flights){APM_ALL[f[3]]=(APM_ALL[f[3]]||0)+f[13];APM_ALL[f[4]]=(APM_ALL[f[4]]||0)+f[13]}buildPlaces();
   readColors();rebuildNet();renderCias();renderPairs();renderTopApts();size();filter();renderSum();
   const ps=pairStats(),pref=['SBSP-SBRJ','SBRJ-SBSP','SBGR-SBRF'].find(k=>ps.has(k)&&ps.get(k).c.size>1)||[...ps.values()].filter(v=>v.c.size>1).sort((a,b)=>b.f-a.f)[0]?.k||[...ps.values()].sort((a,b)=>b.f-a.f)[0].k;
-  const[o,dd]=pref.split('-');$('co').value=o;$('cd').value=dd;compare()}).catch(e=>{$('meta').textContent='Não foi possível carregar os dados: '+e.message});
+  const[o,dd]=pref.split('-');setPlace($('co'),[o]);setPlace($('cd'),[dd]);compare()}).catch(e=>{$('meta').textContent='Não foi possível carregar os dados: '+e.message});
 const ro=new ResizeObserver(()=>{if(D)size()});ro.observe(cv);
 const mo=new MutationObserver(()=>{readColors();draw()});mo.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{readColors();draw()});
