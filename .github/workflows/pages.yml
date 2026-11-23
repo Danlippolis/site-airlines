@@ -1,0 +1,37 @@
+name: Publicar site
+
+# Publica a pasta site/ no GitHub Pages.
+# Roda quando alguém altera site/ na main, manualmente, ou chamado pelo workflow de atualização do RPL
+# (commits feitos pelo próprio GitHub Actions não disparam outros workflows, por isso a chamada direta).
+on:
+  push:
+    branches: [main]
+    paths: ["site/**"]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main   # pega o commit mais novo, inclusive o que o job de atualização acabou de fazer
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
