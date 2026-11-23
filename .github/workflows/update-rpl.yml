@@ -1,0 +1,80 @@
+name: Atualizar RPL
+
+# Baixa o RPL vigente do portal do CGNA, regenera site/data/data.json e publica o site.
+# Só faz commit quando algum arquivo mudou.
+on:
+  schedule:
+    - cron: "17 6 * * *"   # todo dia às 06:17 UTC (03:17 em Brasília)
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Data de início da edição (AAAA-MM-DD). Vazio = edição vigente."
+        required: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: rpl
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar pdftotext (só usado se houver PDF sem o .txt correspondente)
+        run: sudo apt-get update -q && sudo apt-get install -y -q poppler-utils
+
+      - name: Cache das bases de navegação e aeroportos (renova todo mês)
+        uses: actions/cache@v4
+        with:
+          path: data/cache
+          key: navdata-${{ github.run_id }}
+          restore-keys: navdata-
+
+      - name: Renovar bases no começo do mês
+        run: |
+          if [ "$(date -u +%d)" = "01" ]; then rm -rf data/cache; fi
+
+      - name: Baixar RPL do CGNA
+        env:
+          RPL_DATE: ${{ inputs.date }}
+        run: |
+          ARGS="--no-bdr"
+          if [ -n "$RPL_DATE" ]; then ARGS="$ARGS --date $RPL_DATE"; fi
+          # O certificado do CGNA é da cadeia ICP-Brasil, que pode não estar no Python do runner.
+          # Tenta com verificação; se falhar por SSL, repete sem verificar (o conteúdo é checado pelo script).
+          python scripts/rpl_cgna.py $ARGS || python scripts/rpl_cgna.py $ARGS --insecure
+
+      - name: Gerar dados do site
+        run: python scripts/build_site_data.py
+
+      - name: Commit (se mudou)
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/raw site/data
+          if git diff --cached --quiet; then
+            echo "Sem mudanças no RPL."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "RPL: edição $(ls data/raw | sort | tail -1)"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    needs: update
+    if: needs.update.outputs.changed == 'true'
+    uses: ./.github/workflows/pages.yml

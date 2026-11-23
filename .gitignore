@@ -170,7 +170,7 @@ conda-meta/
 .ropeproject
 
 # mkdocs/Zensical documentation
-/site
+# /site  (removido: a pasta site/ é o site publicado)
 
 # mypy
 .mypy_cache/
@@ -221,3 +221,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Bases baixadas pelo build (navegação e aeroportos)
+data/cache/
+# CSVs gerados localmente pelo --csv
+data/raw/**/*.csv
