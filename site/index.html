@@ -283,7 +283,9 @@ function compare(){focusApt=null;const o=$('co').value.toUpperCase().trim(),d=$(
         return `<button class="var${i===0?' on':''}" data-c="${c}" data-ri="${v.ri}"><code>${vars.length>1?'<span style="color:var(--mute)">rota '+(i+1)+':</span> ':''}${esc(r.raw)}</code><small>${same.length?'<b>Rota idêntica à de '+same.join(' e ')+'.</b> ':''}${v.w} voos/sem · ${fls} · ${fmtN(r.nm)} NM (+${ex}% sobre a reta) · ${r.p.length} fixos · EET ${dur(eet)} · ${[...new Set(v.fs.map(f=>f[2]))].join(', ')}</small></button>`}).join('')+
       `<div class="sub2" ${open?'':'hidden'}><p class="hint">Voos da ${FULL[c]} neste trecho — toque para ver o plano:</p>${flRows(groupFl(vars.flatMap(v=>v.fs)),vars.map(v=>v.ri))}</div></div>`}
   const best=Object.entries(by).map(([c,v])=>Math.min(...Object.keys(v).map(ri=>D.routes[ri].nm)));
-  $('cmp').innerHTML=`<p class="hint"><b>${esc(city(o))} → ${esc(city(d))}</b> · distância em linha reta ${fmtN(gc)} NM. Toque numa companhia para ver os voos dela; numa rota, para destacá-la no mapa.</p>`+html;
+  $('cmp').innerHTML=`<p class="hint"><b>${esc(city(o))} → ${esc(city(d))}</b> · distância em linha reta ${fmtN(gc)} NM. Toque numa companhia para ver os voos dela; numa rota, para destacá-la no mapa.</p><div class="btns" style="margin-bottom:4px"><button class="btn" id="dgT">Baixar GPX do trecho</button></div>`+html;
+  const items=[];for(const c of ALL){if(!by[c])continue;Object.entries(by[c]).map(([ri,fs])=>({ri:+ri,fs,w:fs.reduce((s,f)=>s+f[13],0)})).sort((a,b)=>b.w-a.w).forEach((v,i,arr)=>items.push({ri:v.ri,name:`${FULL[c]} ${o}-${d}${arr.length>1?' rota '+(i+1):''}`,desc:`${v.w} voos/sem · FL${[...new Set(v.fs.map(f=>f[7]))].join('/')} · ${D.routes[v.ri].raw}`}))}
+  $('dgT').onclick=e=>download(`${o}-${d}_rotas.gpx`,gpxDoc(`${o}-${d} — rotas por companhia`,items),e.currentTarget,'Baixar GPX do trecho');
   $('cmp').querySelectorAll('.var').forEach(b=>b.onclick=()=>{const c=b.dataset.c,ri=+b.dataset.ri;$('cmp').querySelectorAll(`.var[data-c="${c}"]`).forEach(x=>x.classList.toggle('on',x===b));
     hi=hi.map(h=>h.cia===c?{...h,weak:h.ri!==ri}:h);hi.sort((a,b)=>b.weak-a.weak);draw()});
   hi.sort((a,b)=>b.weak-a.weak);fit(hi.flatMap(h=>RP[h.ri]))}
@@ -300,7 +302,14 @@ $('list').addEventListener('click',e=>{const el=e.target.closest('.fl');if(el)se
 $('list').addEventListener('keydown',e=>{const el=e.target.closest('.fl');if(el&&(e.key==='Enter'||e.key===' ')){e.preventDefault();select(D.flights[+el.dataset.i],true)}});
 for(const id of['q','ft','fd'])$(id).addEventListener('input',filter);
 function markRow(){document.querySelectorAll('.fx tr').forEach(tr=>tr.classList.toggle('on',+tr.dataset.i===hiPt))}
-function gpx(f){const pts=RP[f[12]];return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="RPL" xmlns="http://www.topografix.com/GPX/1/1">\n  <rte>\n    <name>${f[1]} ${f[3]}-${f[4]}</name>\n`+pts.map(p=>`    <rtept lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${p.n}</name></rtept>`).join('\n')+`\n  </rte>\n</gpx>\n`}
+// GPX 1.1 com uma <rte> por rota (o Windy e a maioria dos apps de navegação aceitam)
+const xesc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function gpxDoc(title,items){return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="site-airlines (RPL DECEA/CGNA)" xmlns="http://www.topografix.com/GPX/1/1">\n  <metadata><name>${xesc(title)}</name><desc>RPL edição ${xesc(D.meta.edicao_txt||D.meta.edicao)} · AIRAC ${xesc(D.meta.airac)} · sem SID/STAR · não usar para navegação</desc></metadata>\n`+
+  items.map(it=>`  <rte>\n    <name>${xesc(it.name)}</name>\n    <desc>${xesc(it.desc)}</desc>\n`+RP[it.ri].map(p=>`    <rtept lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${xesc(p.n)}</name></rtept>`).join('\n')+`\n  </rte>\n`).join('')+`</gpx>\n`}
+function gpx(f){return gpxDoc(`${f[1]} ${f[3]}-${f[4]}`,[{ri:f[12],name:`${f[1]} ${f[3]}-${f[4]}`,desc:`${FULL[f[0]]} · ${f[2]} · FL${f[7]} · ${f[8]} · EOBT ${hhmm(f[5])}Z · ${D.routes[f[12]].raw}`}])}
+// baixa um arquivo gerado na página; se o navegador bloquear, avisa no próprio botão
+function download(name,text,btn,label){try{const url=URL.createObjectURL(new Blob([text],{type:'application/gpx+xml'}));const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);btn.textContent='Baixado'}
+  catch(e){btn.textContent='Download bloqueado — use Copiar GPX'}setTimeout(()=>btn.textContent=label,2200)}
 function select(f,scroll){focusApt=null;sel=f;hi=[{cia:f[0],ri:f[12]}];
   document.querySelectorAll('#list .fl').forEach(el=>el.setAttribute('aria-selected',D.flights[+el.dataset.i]===f));
   renderDetail(f,$('detail'));fit(RP[f[12]]);if(scroll&&innerWidth<=900)window.scrollTo({top:0,behavior:'smooth'})}
@@ -312,10 +321,11 @@ function renderDetail(f,el){cmpPt=null;hiPt=null;$('tip').style.display='none';c
   <div class="kv"><div><span>EOBT</span><strong>${hhmm(f[5])}Z</strong></div><div><span>EET</span><strong>${dur(f[6])}</strong></div><div><span>Nível</span><strong>FL${f[7]}</strong></div>
   <div><span>Velocidade</span><strong>${f[8]}</strong></div><div><span>Distância</span><strong>${fmtN(r.nm)} NM</strong></div><div><span>Linha reta</span><strong>${fmtN(r.gc)} NM</strong></div></div>
   <p class="sub" style="margin-top:8px">Opera: ${dias(f[9])} · validade ${dmy(f[10])}–${f[11]==='UFN'?'indeterminada':dmy(f[11])}${f.n>1?' · '+f.n+' planos agrupados':''}</p>
-  <div class="raw">${esc(r.raw)}</div><div class="btns"><button class="btn b-cp">Copiar rota</button><button class="btn b-cg">Copiar GPX</button><button class="btn b-vc">Comparar este trecho</button></div>
+  <div class="raw">${esc(r.raw)}</div><div class="btns"><button class="btn b-cp">Copiar rota</button><button class="btn b-dg">Baixar GPX</button><button class="btn b-cg">Copiar GPX</button><button class="btn b-vc">Comparar este trecho</button></div>
   <table><thead><tr><th>Fixo</th><th>Via</th><th class="hide-s">Lat</th><th class="hide-s">Lon</th><th class="n">Perna</th><th class="n">Acum.</th></tr></thead><tbody class="fx">${rows}</tbody></table>`;
   const cp=(cls,txt,label)=>{const b=el.querySelector(cls);b.onclick=async()=>{try{await navigator.clipboard.writeText(txt);b.textContent='Copiado'}catch(e){b.textContent='Não foi possível copiar'}setTimeout(()=>b.textContent=label,1600)}};
   cp('.b-cp',`${f[3]} ${r.raw} ${f[4]}`,'Copiar rota');cp('.b-cg',gpx(f),'Copiar GPX');
+  {const b=el.querySelector('.b-dg');b.onclick=()=>download(`${f[1]}_${f[3]}-${f[4]}.gpx`,gpx(f),b,'Baixar GPX')}
   el.querySelector('.b-vc').onclick=()=>{$('co').value=f[3];$('cd').value=f[4];$('t-cmp').click();compare()};
   el.querySelector('.fx').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;hiPt=+tr.dataset.i;const p=pts[hiPt];view.lat=p.lat;view.lon=p.lon;if(view.k<60)view.k=60;markRow();draw();if(innerWidth<=900)$('mapwrap').scrollIntoView({behavior:'smooth'})})}
 // abre o plano de um voo listado nas abas Trecho/Aeroporto: a rota dele fica em destaque e as demais esmaecem
