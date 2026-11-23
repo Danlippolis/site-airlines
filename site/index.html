@@ -46,6 +46,14 @@ select{flex:1;height:44px;padding:0 8px;border:1px solid var(--line);border-radi
 .card h3 i{width:12px;height:12px;border-radius:50%}.card h3 span{margin-left:auto;font-size:14px;font-weight:400;color:var(--mute);white-space:nowrap}
 .var{display:block;width:100%;text-align:left;padding:10px 12px;border:0;border-top:1px solid var(--line);background:none;cursor:pointer}
 .var:first-of-type{border-top:0}.var:hover,.var.on{background:var(--chip)}
+.ch{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;font-size:17px;font-weight:800;cursor:pointer;border-bottom:1px solid var(--line);min-height:44px}
+.ch i{width:12px;height:12px;border-radius:50%;flex:none}.ch span{margin-left:auto;font-size:14px;font-weight:400;color:var(--mute);white-space:nowrap}.ch:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+.ch::after{content:'▾';margin-left:6px;color:var(--mute);transition:transform .15s}.ch[aria-expanded=true]::after{transform:rotate(180deg)}
+.sub2{border-top:1px solid var(--line);background:var(--panel)}.sub2 .hint{margin:8px 12px}
+.org{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;padding:9px 12px;border:0;border-top:1px solid var(--line);background:none;cursor:pointer;min-height:44px}.org:hover,.org.on{background:var(--chip)}
+.org b{font-weight:800}.org span{color:var(--mute);font-size:14px}.org em{margin-left:auto;font-style:normal;font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:none}.seg button{min-height:44px;padding:0 12px;border:0;background:var(--bg);cursor:pointer}.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.dt{margin-top:14px;scroll-margin-top:12px}
 .var code{display:block;font:14px/1.4 'Overpass Mono',monospace;overflow-wrap:anywhere}
 .var small{display:block;color:var(--mute);font-size:13px;margin-top:3px}
 .list{border-top:1px solid var(--line);max-height:330px;overflow-y:auto;margin-top:8px}
@@ -91,7 +99,8 @@ tbody.fx tr{cursor:pointer}tbody.fx tr:hover td,tbody.fx tr.on td{background:var
     <p class="meta" id="meta">Carregando planos de voo…</p>
     <div class="cias" id="cias"></div>
     <div class="tabs" role="tablist">
-      <button role="tab" id="t-cmp" aria-selected="true">Comparar trecho</button>
+      <button role="tab" id="t-cmp" aria-selected="true">Trecho</button>
+      <button role="tab" id="t-apt" aria-selected="false">Aeroporto</button>
       <button role="tab" id="t-voo" aria-selected="false">Voos</button>
       <button role="tab" id="t-sum" aria-selected="false">Resumo</button>
     </div>
@@ -105,6 +114,17 @@ tbody.fx tr{cursor:pointer}tbody.fx tr:hover td,tbody.fx tr.on td{background:var
       <p class="hint" id="ph">Trechos operados por mais de uma companhia:</p>
       <div class="pairs" id="pairs"></div>
       <div id="cmp"></div>
+      <div class="detail dt" id="cmpDet"></div>
+    </section>
+    <section id="p-apt" hidden>
+      <div class="row">
+        <input class="inp" id="ap" list="apts" placeholder="Aeroporto (ICAO)" aria-label="Aeroporto (ICAO)" maxlength="4" autocomplete="off">
+        <div class="seg" role="group" aria-label="Sentido"><button id="dirA" aria-pressed="true">Chegadas</button><button id="dirD" aria-pressed="false">Partidas</button></div>
+      </div>
+      <p class="hint">Aeroportos mais movimentados:</p>
+      <div class="pairs" id="topApts"></div>
+      <div id="apt"></div>
+      <div class="detail dt" id="aptDet"></div>
     </section>
     <section id="p-voo" hidden>
       <input class="inp" id="q" type="search" placeholder="Voo, aeroporto, fixo ou aerovia" aria-label="Buscar" autocomplete="off" style="width:100%;text-transform:none">
@@ -133,7 +153,7 @@ const DAYS=['seg','ter','qua','qui','sex','sáb','dom'];
 const NAMES={SBSP:'São Paulo/Congonhas',SBGR:'São Paulo/Guarulhos',SBKP:'Campinas',SBGL:'Rio/Galeão',SBRJ:'Rio/Santos Dumont',SBCF:'Belo Horizonte/Confins',SBBR:'Brasília'};
 const ALL=['AZU','ACN','GLO','TAM'],FULL={AZU:'Azul',ACN:'Azul Conecta',GLO:'Gol',TAM:'LATAM'};
 let D,B,RP=[],NAMESET=[],POINTNAMES=new Set();
-let on=new Set(),shown=[],limit=200,sel=null,hi=[],hiPt=null,cmpKey=null;
+let focusApt=null,on=new Set(),shown=[],limit=200,sel=null,hi=[],hiPt=null,cmpKey=null,aptKey=null,aptDir='A',cmpOpen=new Set(),aptOpen=new Set(),aptOrg=null,G=[];
 const cv=$('cv'),ctx=cv.getContext('2d');
 const view={lon:-50,lat:-14,k:14};const COS=Math.cos(14*Math.PI/180);
 let W=0,H=0,dpr=1,col={};
@@ -178,11 +198,12 @@ function render(){raf=0;if(!D)return;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillS
     ctx.beginPath();pts.forEach((p,i)=>{const[x,y]=px(p.lat,p.lon);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()}
   // aeroportos
   const used=[];ctx.textBaseline='middle';
-  const hiA=new Set(hi.flatMap(h=>[D.routes[h.ri].o,D.routes[h.ri].d]));
-  const ap=Object.entries(D.airports).filter(([c])=>APM[c]||hiA.has(c)).sort((a,b)=>(APM[b[0]]||0)-(APM[a[0]]||0));
+  const hiA=new Set(hi.filter(h=>!h.weak).flatMap(h=>[D.routes[h.ri].o,D.routes[h.ri].d]));if(focusApt)hiA.add(focusApt);
+  const weakA=new Set(hi.filter(h=>h.weak).flatMap(h=>[D.routes[h.ri].o,D.routes[h.ri].d]));
+  const ap=Object.entries(D.airports).filter(([c])=>APM[c]||hiA.has(c)||weakA.has(c)).sort((a,b)=>(APM[b[0]]||0)-(APM[a[0]]||0));
   ap.forEach(([c,a],i)=>{const[x,y]=px(a[0],a[1]);if(x<-20||y<-20||x>W+20||y>H+20)return;const m=APM[c]||0,r=Math.min(7,2+Math.sqrt(m)/4);
     ctx.fillStyle=col.panel;ctx.strokeStyle=col.ink;ctx.lineWidth=1.1;ctx.beginPath();ctx.arc(x,y,hiA.has(c)?6:r,0,7);ctx.fill();ctx.stroke();
-    if(hiA.has(c)||(!dim&&(i<(view.k>30?60:view.k>16?25:10)))){ctx.font=(hiA.has(c)?'800 13px':'600 11px')+' Overpass,sans-serif';const w=ctx.measureText(c).width,rr=[x+r+3,y-7,x+r+7+w,y+7];
+    if(hiA.has(c)||weakA.has(c)||(!dim&&(i<(view.k>30?60:view.k>16?25:10)))){ctx.font=(hiA.has(c)?'800 13px':'600 11px')+' Overpass,sans-serif';const w=ctx.measureText(c).width,rr=[x+r+3,y-7,x+r+7+w,y+7];
       if(hiA.has(c)||!used.some(u=>rr[0]<u[2]&&rr[2]>u[0]&&rr[1]<u[3]&&rr[3]>u[1])){used.push(rr);ctx.fillStyle=hiA.has(c)?col.ink:col.mute;ctx.fillText(c,x+r+5,y)}}});
   // rotas destacadas
   const strong=hi.filter(h=>!h.weak),grp={};strong.forEach(h=>(grp[h.ri]??=[]).push(h));
@@ -202,7 +223,7 @@ function render(){raf=0;if(!D)return;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillS
       if(ok){ctx.fillStyle=col.panel;ctx.strokeStyle=c;ctx.lineWidth=1;ctx.fillRect(x-w/2,y-8,w,16);ctx.strokeRect(x-w/2,y-8,w,16);ctx.fillStyle=c;ctx.textAlign='center';ctx.fillText(v,x,y+1);ctx.textAlign='left';used.push([x-w/2,y-8,x+w/2,y+8])}
       i=j+1}
     const order=pts.map((p,i)=>i).filter(i=>pts[i].k!=='A').sort((a,b)=>(pts[a].x||0)-(pts[b].x||0));
-    for(const i of order){const p=pts[i],[x,y]=P[i],isOn=(sel&&hiPt===i)||cmpPt===p.n;const fk=p.n+'@'+p.lat.toFixed(3);
+    for(const i of order){const p=pts[i],[x,y]=P[i],isOn=(hiPt===i&&(h.det||hi.length===1))||cmpPt===p.n;const fk=p.n+'@'+p.lat.toFixed(3);
       if(doneFix.has(fk)){ctx.fillStyle=col.panel;ctx.strokeStyle=c;ctx.lineWidth=1.6;sym(p.k,x,y,p.x?4:5.5);continue}doneFix.add(fk);ctx.fillStyle=isOn?c:col.panel;ctx.strokeStyle=c;ctx.lineWidth=1.6;sym(p.k,x,y,p.x?4:5.5);
       ctx.font=(p.x?'400 11px':'800 12px')+' Overpass,sans-serif';const w=ctx.measureText(p.n).width;
       for(const[dx,dy]of[[8,-9],[8,9],[-8-w,-9],[-8-w,9],[-w/2,-16],[-w/2,16]]){const r=[x+dx-2,y+dy-7,x+dx+w+2,y+dy+7];
@@ -234,11 +255,11 @@ function renderCias(){const wk={};for(const f of D.flights)wk[f[0]]=(wk[f[0]]||0
   $('legend').innerHTML=ALL.filter(c=>on.has(c)).map(c=>`<span><i style="background:var(--${c})"></i>${FULL[c]}</span>`).join('')+'<label><input type="checkbox" id="net" '+(window._net===false?'':'checked')+'> malha</label><span style="color:var(--mute)">- - SID/STAR</span>';
   $('net').onchange=e=>{window._net=e.target.checked;draw()}}
 $('cias').addEventListener('click',e=>{const b=e.target.closest('.cia');if(!b||b.disabled)return;const c=b.dataset.c;on.has(c)?on.delete(c):on.add(c);if(!on.size)on.add(c);
-  rebuildNet();renderCias();renderPairs();if(cmpKey)compare();filter();renderSum();draw()});
+  rebuildNet();renderCias();renderPairs();renderTopApts();if(cmpKey)compare();if(aptKey)airport();filter();renderSum();draw()});
 // abas
-const TABS={cmp:'p-cmp',voo:'p-voo',sum:'p-sum'};
+const TABS={cmp:'p-cmp',apt:'p-apt',voo:'p-voo',sum:'p-sum'};
 for(const t in TABS)$('t-'+t).onclick=()=>{for(const u in TABS){$('t-'+u).setAttribute('aria-selected',u===t);$(TABS[u]).hidden=u!==t}
-  if(t==='cmp'&&cmpKey)compare();else if(t==='voo'&&sel)select(sel,false);else if(t==='sum'){hi=[];draw();fit(Object.keys(APM).map(c=>({lat:D.airports[c][0],lon:D.airports[c][1]})))}};
+  if(t==='cmp'&&cmpKey)compare();else if(t==='apt'){if(!aptKey)$('ap').value=topApts()[0];airport()}else if(t==='voo'&&sel)select(sel,false);else if(t==='sum'){hi=[];focusApt=null;draw();fit(Object.keys(APM).map(c=>({lat:D.airports[c][0],lon:D.airports[c][1]})))}};
 // comparar trecho
 function pairStats(){const m=new Map();for(const f of D.flights){if(!on.has(f[0]))continue;const k=f[3]+'-'+f[4];if(!m.has(k))m.set(k,{k,c:new Set(),f:0});const v=m.get(k);v.c.add(f[0]);v.f+=f[13]}return m}
 function renderPairs(){const m=[...pairStats().values()].filter(v=>v.c.size>1).sort((a,b)=>b.c.size-a.c.size||b.f-a.f).slice(0,10);
@@ -248,19 +269,21 @@ function renderPairs(){const m=[...pairStats().values()].filter(v=>v.c.size>1).s
 $('pairs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const[o,d]=b.dataset.k.split('-');$('co').value=o;$('cd').value=d;compare()});
 $('swap').onclick=()=>{const a=$('co').value;$('co').value=$('cd').value;$('cd').value=a;compare()};
 for(const id of['co','cd'])$(id).addEventListener('input',()=>{const o=$('co').value.toUpperCase(),d=$('cd').value.toUpperCase();if(o.length===4&&d.length===4)compare()});
-function compare(){const o=$('co').value.toUpperCase().trim(),d=$('cd').value.toUpperCase().trim();cmpKey=o+'-'+d;cmpPt=null;
+function compare(){focusApt=null;const o=$('co').value.toUpperCase().trim(),d=$('cd').value.toUpperCase().trim();if(cmpKey!==o+'-'+d)$('cmpDet').innerHTML='';cmpKey=o+'-'+d;cmpPt=null;
   const fl=D.flights.filter(f=>on.has(f[0])&&f[3]===o&&f[4]===d);
   if(!fl.length){hi=[];draw();$('cmp').innerHTML=`<p class="hint">Nenhuma companhia selecionada tem ${esc(o)} → ${esc(d)} no RPL desta semana.</p>`;return}
   const by={};for(const f of fl){(by[f[0]]??={})[f[12]]??=[];by[f[0]][f[12]].push(f)}
   hi=[];let html='';const gc=D.routes[fl[0][12]].gc;
   for(const c of ALL){if(!by[c])continue;const vars=Object.entries(by[c]).map(([ri,fs])=>({ri:+ri,fs,w:fs.reduce((s,f)=>s+f[13],0)})).sort((a,b)=>b.w-a.w);
     const tot=vars.reduce((s,v)=>s+v.w,0);vars.forEach((v,i)=>hi.push({cia:c,ri:v.ri,weak:i>0}));
-    html+=`<div class="card"><h3><i style="background:var(--${c})"></i>${FULL[c]}<span>${tot} voos/sem · ${vars.length} ${vars.length>1?'rotas':'rota'}</span></h3>`+
+    const open=cmpOpen.has(c);
+    html+=`<div class="card"><button class="ch" data-c="${c}" aria-expanded="${open}"><i style="background:var(--${c})"></i>${FULL[c]}<span>${tot} voos/sem · ${vars.length} ${vars.length>1?'rotas':'rota'}</span></button>`+
       vars.map((v,i)=>{const r=D.routes[v.ri],fls=[...new Set(v.fs.map(f=>'FL'+f[7]))].join('/'),eet=v.fs[0][6],ex=r.gc?Math.round((r.nm/r.gc-1)*100):0;
         const same=ALL.filter(o=>o!==c&&by[o]&&by[o][v.ri]).map(o=>FULL[o]);
-        return `<button class="var${i===0?' on':''}" data-c="${c}" data-ri="${v.ri}"><code>${esc(r.raw)}</code><small>${same.length?'<b>Rota idêntica à de '+same.join(' e ')+'.</b> ':''}${v.w} voos/sem · ${fls} · ${fmtN(r.nm)} NM (+${ex}% sobre a reta) · ${r.p.length} fixos · EET ${dur(eet)} · ${[...new Set(v.fs.map(f=>f[2]))].join(', ')}</small></button>`}).join('')+'</div>'}
+        return `<button class="var${i===0?' on':''}" data-c="${c}" data-ri="${v.ri}"><code>${vars.length>1?'<span style="color:var(--mute)">rota '+(i+1)+':</span> ':''}${esc(r.raw)}</code><small>${same.length?'<b>Rota idêntica à de '+same.join(' e ')+'.</b> ':''}${v.w} voos/sem · ${fls} · ${fmtN(r.nm)} NM (+${ex}% sobre a reta) · ${r.p.length} fixos · EET ${dur(eet)} · ${[...new Set(v.fs.map(f=>f[2]))].join(', ')}</small></button>`}).join('')+
+      `<div class="sub2" ${open?'':'hidden'}><p class="hint">Voos da ${FULL[c]} neste trecho — toque para ver o plano:</p>${flRows(groupFl(vars.flatMap(v=>v.fs)),vars.map(v=>v.ri))}</div></div>`}
   const best=Object.entries(by).map(([c,v])=>Math.min(...Object.keys(v).map(ri=>D.routes[ri].nm)));
-  $('cmp').innerHTML=`<p class="hint"><b>${esc(city(o))} → ${esc(city(d))}</b> · distância em linha reta ${fmtN(gc)} NM. A rota mais usada por cada companhia fica em destaque no mapa; toque numa variante para trocá-la.</p>`+html;
+  $('cmp').innerHTML=`<p class="hint"><b>${esc(city(o))} → ${esc(city(d))}</b> · distância em linha reta ${fmtN(gc)} NM. Toque numa companhia para ver os voos dela; numa rota, para destacá-la no mapa.</p>`+html;
   $('cmp').querySelectorAll('.var').forEach(b=>b.onclick=()=>{const c=b.dataset.c,ri=+b.dataset.ri;$('cmp').querySelectorAll(`.var[data-c="${c}"]`).forEach(x=>x.classList.toggle('on',x===b));
     hi=hi.map(h=>h.cia===c?{...h,weak:h.ri!==ri}:h);hi.sort((a,b)=>b.weak-a.weak);draw()});
   hi.sort((a,b)=>b.weak-a.weak);fit(hi.flatMap(h=>RP[h.ri]))}
@@ -276,23 +299,70 @@ $('more').onclick=()=>{limit+=200;renderList()};
 $('list').addEventListener('click',e=>{const el=e.target.closest('.fl');if(el)select(D.flights[+el.dataset.i],true)});
 $('list').addEventListener('keydown',e=>{const el=e.target.closest('.fl');if(el&&(e.key==='Enter'||e.key===' ')){e.preventDefault();select(D.flights[+el.dataset.i],true)}});
 for(const id of['q','ft','fd'])$(id).addEventListener('input',filter);
-function markRow(){document.querySelectorAll('#fx tr').forEach(tr=>tr.classList.toggle('on',+tr.dataset.i===hiPt))}
+function markRow(){document.querySelectorAll('.fx tr').forEach(tr=>tr.classList.toggle('on',+tr.dataset.i===hiPt))}
 function gpx(f){const pts=RP[f[12]];return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="RPL" xmlns="http://www.topografix.com/GPX/1/1">\n  <rte>\n    <name>${f[1]} ${f[3]}-${f[4]}</name>\n`+pts.map(p=>`    <rtept lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${p.n}</name></rtept>`).join('\n')+`\n  </rte>\n</gpx>\n`}
-function select(f,scroll){sel=f;cmpPt=null;hi=[{cia:f[0],ri:f[12]}];hiPt=null;$('tip').style.display='none';const pts=RP[f[12]],r=D.routes[f[12]];
-  document.querySelectorAll('.fl').forEach(el=>el.setAttribute('aria-selected',D.flights[+el.dataset.i]===f));
+function select(f,scroll){focusApt=null;sel=f;hi=[{cia:f[0],ri:f[12]}];
+  document.querySelectorAll('#list .fl').forEach(el=>el.setAttribute('aria-selected',D.flights[+el.dataset.i]===f));
+  renderDetail(f,$('detail'));fit(RP[f[12]]);if(scroll&&innerWidth<=900)window.scrollTo({top:0,behavior:'smooth'})}
+// plano de voo detalhado, em qualquer aba
+function renderDetail(f,el){cmpPt=null;hiPt=null;$('tip').style.display='none';const pts=RP[f[12]],r=D.routes[f[12]];
   let acc=0;const rows=pts.map((p,i)=>{const leg=i?nm([pts[i-1].lat,pts[i-1].lon],[p.lat,p.lon]):0;acc+=leg;const s=p.k==='A'?'●':{F:'▲',V:'⬡',N:'◎',C:'✕'}[p.k];
     return `<tr data-i="${i}" class="${p.x?'x':''}"><td><span style="color:var(--${f[0]})">${s}</span> ${esc(p.n)}</td><td>${i===0?'':esc(i===1||i===pts.length-1?(p.via||'DCT*'):(p.via||'DCT'))}</td><td class="hide-s">${fmtC(p.lat,2,'NS')}</td><td class="hide-s">${fmtC(p.lon,3,'EW')}</td><td class="n">${i?Math.round(leg):''}</td><td class="n">${i?Math.round(acc):''}</td></tr>`}).join('');
-  $('detail').innerHTML=`<h2>${f[1]} · ${f[3]} → ${f[4]}</h2><p class="sub">${FULL[f[0]]} · ${esc(city(f[3]))} → ${esc(city(f[4]))} · ${f[2]}</p>
+  el.innerHTML=`<h2>${f[1]} · ${f[3]} → ${f[4]}</h2><p class="sub">${FULL[f[0]]} · ${esc(city(f[3]))} → ${esc(city(f[4]))} · ${f[2]}</p>
   <div class="kv"><div><span>EOBT</span><strong>${hhmm(f[5])}Z</strong></div><div><span>EET</span><strong>${dur(f[6])}</strong></div><div><span>Nível</span><strong>FL${f[7]}</strong></div>
   <div><span>Velocidade</span><strong>${f[8]}</strong></div><div><span>Distância</span><strong>${fmtN(r.nm)} NM</strong></div><div><span>Linha reta</span><strong>${fmtN(r.gc)} NM</strong></div></div>
-  <p class="sub" style="margin-top:8px">Opera: ${dias(f[9])} · validade ${dmy(f[10])}–${dmy(f[11])}</p>
-  <div class="raw">${esc(r.raw)}</div><div class="btns"><button class="btn" id="cp">Copiar rota</button><button class="btn" id="cg">Copiar GPX</button><button class="btn" id="vc">Comparar este trecho</button></div>
-  <table><thead><tr><th>Fixo</th><th>Via</th><th class="hide-s">Lat</th><th class="hide-s">Lon</th><th class="n">Perna</th><th class="n">Acum.</th></tr></thead><tbody class="fx" id="fx">${rows}</tbody></table>`;
-  const cp=(id,txt,label)=>{$(id).onclick=async()=>{try{await navigator.clipboard.writeText(txt);$(id).textContent='Copiado'}catch(e){$(id).textContent='Não foi possível copiar'}setTimeout(()=>$(id).textContent=label,1600)}};
-  cp('cp',`${f[3]} ${r.raw} ${f[4]}`,'Copiar rota');cp('cg',gpx(f),'Copiar GPX');
-  $('vc').onclick=()=>{$('co').value=f[3];$('cd').value=f[4];$('t-cmp').click();compare()};
-  $('fx').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;hiPt=+tr.dataset.i;const p=pts[hiPt];view.lat=p.lat;view.lon=p.lon;if(view.k<60)view.k=60;markRow();draw();if(innerWidth<=900)$('mapwrap').scrollIntoView({behavior:'smooth'})});
-  fit(pts);if(scroll&&innerWidth<=900)window.scrollTo({top:0,behavior:'smooth'})}
+  <p class="sub" style="margin-top:8px">Opera: ${dias(f[9])} · validade ${dmy(f[10])}–${f[11]==='UFN'?'indeterminada':dmy(f[11])}${f.n>1?' · '+f.n+' planos agrupados':''}</p>
+  <div class="raw">${esc(r.raw)}</div><div class="btns"><button class="btn b-cp">Copiar rota</button><button class="btn b-cg">Copiar GPX</button><button class="btn b-vc">Comparar este trecho</button></div>
+  <table><thead><tr><th>Fixo</th><th>Via</th><th class="hide-s">Lat</th><th class="hide-s">Lon</th><th class="n">Perna</th><th class="n">Acum.</th></tr></thead><tbody class="fx">${rows}</tbody></table>`;
+  const cp=(cls,txt,label)=>{const b=el.querySelector(cls);b.onclick=async()=>{try{await navigator.clipboard.writeText(txt);b.textContent='Copiado'}catch(e){b.textContent='Não foi possível copiar'}setTimeout(()=>b.textContent=label,1600)}};
+  cp('.b-cp',`${f[3]} ${r.raw} ${f[4]}`,'Copiar rota');cp('.b-cg',gpx(f),'Copiar GPX');
+  el.querySelector('.b-vc').onclick=()=>{$('co').value=f[3];$('cd').value=f[4];$('t-cmp').click();compare()};
+  el.querySelector('.fx').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr)return;hiPt=+tr.dataset.i;const p=pts[hiPt];view.lat=p.lat;view.lon=p.lon;if(view.k<60)view.k=60;markRow();draw();if(innerWidth<=900)$('mapwrap').scrollIntoView({behavior:'smooth'})})}
+// abre o plano de um voo listado nas abas Trecho/Aeroporto: a rota dele fica em destaque e as demais esmaecem
+function openDetail(f,el){hi=hi.filter(h=>!h.det).map(h=>({...h,weak:true}));hi.push({cia:f[0],ri:f[12],det:true});
+  renderDetail(f,el);fit(RP[f[12]]);el.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})}
+// agrupa planos iguais (mesmo voo, horário, rota, equipamento e nível), juntando dias e validade
+const ymd=s=>s==='UFN'?'999999':s.slice(4)+s.slice(2,4)+s.slice(0,2);
+function groupFl(fs){const m=new Map();
+  for(const f of fs){const k=[f[0],f[1],f[5],f[12],f[2],f[7]].join('|');if(!m.has(k)){const g=f.slice();g.i=f.i;g.n=0;g.w=0;m.set(k,g)}
+    const g=m.get(k);g.n++;g.w+=f[13];g[9]=[...g[9]].map((c,i)=>c!=='0'||f[9][i]!=='0'?String(i+1):'0').join('');
+    if(ymd(f[10])<ymd(g[10]))g[10]=f[10];if(ymd(f[11])>ymd(g[11]))g[11]=f[11]}
+  return [...m.values()].sort((a,b)=>a[5].localeCompare(b[5])||a[1].localeCompare(b[1]))}
+function flRows(gs,vars){return gs.map(g=>{G.push(g);const v=vars&&vars.length>1?vars.indexOf(g[12])+1:0;
+  return `<div class="fl" role="button" tabindex="0" data-g="${G.length-1}"><b><i style="background:var(--${g[0]})"></i>${g[1]}</b><span class="od">${g[3]} → ${g[4]}</span><span class="t">${hhmm(g[5])}Z</span><span class="s">${g[2]} · FL${g[7]} · ${dias(g[9])||'—'}${v?' · rota '+v:''}${g.n>1?' · '+g.n+' planos':''}</span></div>`}).join('')||'<p class="hint">Nenhum voo.</p>'}
+function bindList(box,det,onHead,onOrg){
+  box.addEventListener('click',e=>{const ch=e.target.closest('.ch');if(ch){const open=ch.getAttribute('aria-expanded')!=='true';ch.setAttribute('aria-expanded',open);ch.parentElement.querySelector('.sub2').hidden=!open;onHead(ch.dataset.c,open);return}
+    const o=e.target.closest('.org');if(o&&onOrg){onOrg(o.dataset.k);return}
+    const fl=e.target.closest('.fl');if(fl){box.querySelectorAll('.fl').forEach(x=>x.setAttribute('aria-selected',x===fl));openDetail(G[+fl.dataset.g],det)}});
+  box.addEventListener('keydown',e=>{const fl=e.target.closest('.fl');if(fl&&(e.key==='Enter'||e.key===' ')){e.preventDefault();fl.click()}})}
+bindList($('cmp'),$('cmpDet'),(c,open)=>open?cmpOpen.add(c):cmpOpen.delete(c));
+// aeroporto: companhias que chegam (ou saem) e, por companhia, as origens (ou destinos)
+function topApts(){return Object.entries(APM).sort((a,b)=>b[1]-a[1]).slice(0,10).map(x=>x[0])}
+function renderTopApts(){$('topApts').innerHTML=topApts().map(c=>`<button data-a="${c}">${c}</button>`).join('')}
+$('topApts').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$('ap').value=b.dataset.a;aptOrg=null;airport()});
+$('ap').addEventListener('input',()=>{if($('ap').value.trim().length===4){aptOrg=null;airport()}});
+$('dirA').onclick=()=>{aptDir='A';aptOrg=null;airport()};$('dirD').onclick=()=>{aptDir='D';aptOrg=null;airport()};
+function airport(refit=true){const a=$('ap').value.toUpperCase().trim(),arr=aptDir==='A';focusApt=D.airports[a]?a:null;
+  if(aptKey!==a+aptDir)$('aptDet').innerHTML='';aptKey=a+aptDir;cmpPt=null;
+  $('dirA').setAttribute('aria-pressed',arr);$('dirD').setAttribute('aria-pressed',!arr);
+  const fl=D.flights.filter(f=>on.has(f[0])&&(arr?f[4]:f[3])===a);
+  if(!fl.length){hi=[];draw();$('apt').innerHTML=`<p class="hint">Nenhum voo das companhias selecionadas ${arr?'chega a':'sai de'} ${esc(a)} no RPL desta semana.</p>`;return}
+  const by={};for(const f of fl){const o=arr?f[3]:f[4];((by[f[0]]??={})[o]??=[]).push(f)}
+  const tot=fl.reduce((s,f)=>s+f[13],0),others=new Set(fl.map(f=>arr?f[3]:f[4])),nc=Object.keys(by).length;
+  const lbl=n=>arr?(n>1?'origens':'origem'):(n>1?'destinos':'destino');
+  let html=`<p class="hint"><b>${esc(a)} — ${esc(city(a))}</b> · ${fmtN(tot)} voos/sem ${arr?'chegando de':'saindo para'} ${others.size} aeroportos, por ${nc} ${nc>1?'companhias':'companhia'}. Toque numa companhia para ver ${arr?'as origens':'os destinos'}, e num aeroporto para ver os voos.</p>`;
+  hi=[];
+  for(const c of ALL){if(!by[c])continue;
+    const os=Object.entries(by[c]).map(([o,fs])=>({o,fs,w:fs.reduce((s,f)=>s+f[13],0),rs:[...new Set(fs.map(f=>f[12]))]})).sort((x,y)=>y.w-x.w);
+    const w=os.reduce((s,x)=>s+x.w,0),open=aptOpen.has(c);
+    for(const x of os)for(const ri of x.rs)hi.push({cia:c,ri,weak:aptOrg!==c+'|'+x.o});
+    html+=`<div class="card"><button class="ch" data-c="${c}" aria-expanded="${open}"><i style="background:var(--${c})"></i>${FULL[c]}<span>${fmtN(w)} voos/sem · ${os.length} ${lbl(os.length)}</span></button><div class="sub2" ${open?'':'hidden'}>`+
+      os.map(x=>{const k=c+'|'+x.o,isOn=aptOrg===k;
+        return `<button class="org${isOn?' on':''}" data-k="${k}" aria-expanded="${isOn}"><b>${x.o}</b><span>${esc(city(x.o))}</span><em>${x.w} voos/sem${x.rs.length>1?' · '+x.rs.length+' rotas':''}</em></button>`+(isOn?flRows(groupFl(x.fs),x.rs):'')}).join('')+'</div></div>'}
+  $('apt').innerHTML=html;hi.sort((x,y)=>(y.weak?1:0)-(x.weak?1:0));
+  const strong=hi.filter(h=>!h.weak);
+  if(refit)fit(strong.length?strong.flatMap(h=>RP[h.ri]):[...others,a].map(c=>({lat:D.airports[c][0],lon:D.airports[c][1]})));else draw()}
+bindList($('apt'),$('aptDet'),(c,open)=>open?aptOpen.add(c):aptOpen.delete(c),k=>{aptOrg=aptOrg===k?null:k;if(aptOrg)aptOpen.add(k.split('|')[0]);airport(true)});
 // resumo
 function renderSum(){const S={};for(const c of ALL)if(D.cias[c])S[c]={pl:0,wk:0,ap:new Set(),pr:new Set(),rt:new Set(),nm:0,gc:0,w:0,apm:{}};
   for(const f of D.flights){const s=S[f[0]];if(!s)continue;const r=D.routes[f[12]];s.pl++;s.wk+=f[13];s.ap.add(f[3]);s.ap.add(f[4]);s.pr.add(f[3]+'-'+f[4]);s.rt.add(f[12]);s.nm+=r.nm*f[13];s.gc+=r.gc*f[13];s.apm[f[3]]=(s.apm[f[3]]||0)+f[13]}
@@ -309,7 +379,7 @@ Promise.all([fetch('data/data.json').then(r=>r.json()),fetch('data/base.json').t
   const nc=Object.keys(d.cias).length;$('meta').textContent=`${nc} ${nc>1?'companhias':'companhia'} · ${fmtN(d.flights.length)} planos · ${fmtN(d.routes.length)} rotas distintas · ${Object.keys(d.airports).length} aeroportos`;
   $('ft').innerHTML+=[...new Set(d.flights.map(f=>f[2]))].sort().map(t=>`<option>${t}</option>`).join('');
   $('apts').innerHTML=Object.keys(d.airports).sort().map(c=>`<option value="${c}">${esc(city(c))}</option>`).join('');
-  readColors();rebuildNet();renderCias();renderPairs();size();filter();renderSum();
+  readColors();rebuildNet();renderCias();renderPairs();renderTopApts();size();filter();renderSum();
   const ps=pairStats(),pref=['SBSP-SBRJ','SBRJ-SBSP','SBGR-SBRF'].find(k=>ps.has(k)&&ps.get(k).c.size>1)||[...ps.values()].filter(v=>v.c.size>1).sort((a,b)=>b.f-a.f)[0]?.k||[...ps.values()].sort((a,b)=>b.f-a.f)[0].k;
   const[o,dd]=pref.split('-');$('co').value=o;$('cd').value=dd;compare()}).catch(e=>{$('meta').textContent='Não foi possível carregar os dados: '+e.message});
 const ro=new ResizeObserver(()=>{if(D)size()});ro.observe(cv);
