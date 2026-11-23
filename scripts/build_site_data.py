@@ -71,7 +71,7 @@ class Nav:
         for r in csv.DictReader(io.StringIO(text)):
             for k in (r["icao_code"], r["gps_code"], r["ident"]):
                 if k and re.fullmatch(r"[A-Z]{4}", k) and (k not in self.apt or r["type"] in ("large_airport", "medium_airport")):
-                    self.apt[k] = (float(r["latitude_deg"]), float(r["longitude_deg"]), r["name"], r["municipality"] or "")
+                    self.apt[k] = (float(r["latitude_deg"]), float(r["longitude_deg"]), r["name"], r["municipality"] or "", r["iata_code"] or "")
 
     def pick(self, name, near, airway=None):
         cands = self.byname.get(name, [])
@@ -236,8 +236,8 @@ def main() -> int:
             routes.append({"o": r["adep"], "d": r["dest"], "raw": key[2], "p": seq,
                            "nm": round(sum(dist(p, q) for p, q in zip(chain, chain[1:]))), "gc": round(dist(chain[0], chain[-1]))})
         for x in (r["adep"], r["dest"]):
-            la, lo, nm, city = nav.apt[x]
-            apts[x] = [round(la, 4), round(lo, 4), nm, city]
+            la, lo, nm, city, iata = nav.apt[x]
+            apts[x] = [round(la, 4), round(lo, 4), nm, city, iata]
         flights.append([r["cia"], r["ident"], r["tipo"].split("/")[0], r["adep"], r["dest"], r["eobt"], r["eet"],
                         r["fl"], r["vel"], r["dias"], r["desde"], r["ate"], ridx[key], freq(r)])
 
