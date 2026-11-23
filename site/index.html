@@ -54,6 +54,15 @@ select{flex:1;height:44px;padding:0 8px;border:1px solid var(--line);border-radi
 .org b{font-weight:800}.org span{color:var(--mute);font-size:14px}.org em{margin-left:auto;font-style:normal;font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:none}.seg button{min-height:44px;padding:0 12px;border:0;background:var(--bg);cursor:pointer}.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
 .dt{margin-top:14px;scroll-margin-top:12px}
+.when{margin:10px 0 4px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.when h4{margin:0 0 2px;font-size:16px;font-weight:800}.when p{margin:0 0 8px;font-size:13px;color:var(--mute)}
+.hm{width:100%;border-collapse:separate;border-spacing:3px;margin:0;font-size:13px;table-layout:fixed}
+.hm th{font-weight:600;color:var(--mute);padding:0 0 2px;text-align:center;border:0;white-space:nowrap}.hm th:first-child{text-align:left;width:6.2em}
+.hm td{height:32px;text-align:center;border:0;border-radius:5px;padding:0;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.hm td.lbl{text-align:left;font-weight:600;padding-left:2px;overflow:hidden;text-overflow:ellipsis;border-radius:0}
+.hm tr.tot td{font-weight:800}.hm.hr td{height:22px;font-size:11px}.hm.hr th{font-size:11px}.hm.hr th:first-child{width:3em}
+.hmk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mute);margin-top:6px}.hmk i{width:60px;height:8px;border-radius:4px;background:linear-gradient(90deg,color-mix(in srgb,var(--ink) 6%,transparent),var(--ink))}
+@media(max-width:600px){.hm th:first-child{width:4.6em}.hm td{height:28px}}
 .var code{display:block;font:14px/1.4 'Overpass Mono',monospace;overflow-wrap:anywhere}
 .var small{display:block;color:var(--mute);font-size:13px;margin-top:3px}
 .list{border-top:1px solid var(--line);max-height:330px;overflow-y:auto;margin-top:8px}
@@ -283,12 +292,35 @@ function compare(){focusApt=null;const o=$('co').value.toUpperCase().trim(),d=$(
         return `<button class="var${i===0?' on':''}" data-c="${c}" data-ri="${v.ri}"><code>${vars.length>1?'<span style="color:var(--mute)">rota '+(i+1)+':</span> ':''}${esc(r.raw)}</code><small>${same.length?'<b>Rota idêntica à de '+same.join(' e ')+'.</b> ':''}${v.w} voos/sem · ${fls} · ${fmtN(r.nm)} NM (+${ex}% sobre a reta) · ${r.p.length} fixos · EET ${dur(eet)} · ${[...new Set(v.fs.map(f=>f[2]))].join(', ')}</small></button>`}).join('')+
       `<div class="sub2" ${open?'':'hidden'}><p class="hint">Voos da ${FULL[c]} neste trecho — toque para ver o plano:</p>${flRows(groupFl(vars.flatMap(v=>v.fs)),vars.map(v=>v.ri))}</div></div>`}
   const best=Object.entries(by).map(([c,v])=>Math.min(...Object.keys(v).map(ri=>D.routes[ri].nm)));
-  $('cmp').innerHTML=`<p class="hint"><b>${esc(city(o))} → ${esc(city(d))}</b> · distância em linha reta ${fmtN(gc)} NM. Toque numa companhia para ver os voos dela; numa rota, para destacá-la no mapa.</p><div class="btns" style="margin-bottom:4px"><button class="btn" id="dgT">Baixar GPX do trecho</button></div>`+html;
+  $('cmp').innerHTML=`<p class="hint"><b>${esc(city(o))} → ${esc(city(d))}</b> · distância em linha reta ${fmtN(gc)} NM. Toque numa companhia para ver os voos dela; numa rota, para destacá-la no mapa.</p><div class="btns" style="margin-bottom:4px"><button class="btn" id="dgT">Baixar GPX do trecho</button></div>`+heat(fl)+html;
   const items=[];for(const c of ALL){if(!by[c])continue;Object.entries(by[c]).map(([ri,fs])=>({ri:+ri,fs,w:fs.reduce((s,f)=>s+f[13],0)})).sort((a,b)=>b.w-a.w).forEach((v,i,arr)=>items.push({ri:v.ri,name:`${FULL[c]} ${o}-${d}${arr.length>1?' rota '+(i+1):''}`,desc:`${v.w} voos/sem · FL${[...new Set(v.fs.map(f=>f[7]))].join('/')} · ${D.routes[v.ri].raw}`}))}
   $('dgT').onclick=e=>download(`${o}-${d}_rotas.gpx`,gpxDoc(`${o}-${d} — rotas por companhia`,items),e.currentTarget,'Baixar GPX do trecho');
   $('cmp').querySelectorAll('.var').forEach(b=>b.onclick=()=>{const c=b.dataset.c,ri=+b.dataset.ri;$('cmp').querySelectorAll(`.var[data-c="${c}"]`).forEach(x=>x.classList.toggle('on',x===b));
     hi=hi.map(h=>h.cia===c?{...h,weak:h.ri!==ri}:h);hi.sort((a,b)=>b.weak-a.weak);draw()});
   hi.sort((a,b)=>b.weak-a.weak);fit(hi.flatMap(h=>RP[h.ri]))}
+// heatmap: em que dias (e horários) os voos do trecho acontecem, em horário de Brasília
+const DOWL=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+function occurrences(fs){const st=D.meta.edicao.split('-').map(Number),out=[];
+  for(const f of fs){const a=ymd(f[10]),b=ymd(f[11]);
+    for(let i=0;i<7;i++){const dt=new Date(Date.UTC(st[0],st[1]-1,st[2]+i)),wd=(dt.getUTCDay()+6)%7,key=String(dt.getUTCFullYear()%100).padStart(2,'0')+String(dt.getUTCMonth()+1).padStart(2,'0')+String(dt.getUTCDate()).padStart(2,'0');
+      if(key<a||key>b||f[9][wd]==='0')continue;
+      const t=new Date(dt.getTime()+(+f[5].slice(0,2)*60+ +f[5].slice(2))*6e4-3*36e5);   // EOBT UTC -> Brasília
+      out.push({c:f[0],wd:(t.getUTCDay()+6)%7,h:t.getUTCHours()})}}
+  return out}
+function cell(n,max,c){if(!n)return `<td style="background:color-mix(in srgb,var(--line) 45%,transparent);color:var(--mute)">·</td>`;
+  const a=Math.round(14+86*n/max);return `<td style="background:color-mix(in srgb,var(--${c}) ${a}%,transparent);color:${a>55?'var(--panel)':'var(--ink)'}" title="${n} voos">${n}</td>`}
+function heat(fs){const oc=occurrences(fs);if(!oc.length)return'';const cs=ALL.filter(c=>oc.some(o=>o.c===c));
+  const by={};for(const o of oc){(by[o.c]??=Array(7).fill(0))[o.wd]++}const tot=Array(7).fill(0);oc.forEach(o=>tot[o.wd]++);
+  const max=Math.max(...cs.flatMap(c=>by[c])),maxT=Math.max(...tot),best=tot.indexOf(maxT),low=tot.indexOf(Math.min(...tot));
+  const hb=Array.from({length:7},()=>Array(12).fill(0));oc.forEach(o=>hb[o.wd][o.h>>1]++);const maxH=Math.max(...hb.flat());
+  const peak=[...Array(12).keys()].map(b=>[b,hb.reduce((s,r)=>s+r[b],0)]).sort((x,y)=>y[1]-x[1])[0][0];
+  return `<div class="when"><h4>Quando os voos acontecem</h4><p>${oc.length} voos na semana de ${esc(D.meta.edicao_txt||D.meta.edicao)}. Mais voos ${['na segunda','na terça','na quarta','na quinta','na sexta','no sábado','no domingo'][best]} (${maxT}), menos ${['na segunda','na terça','na quarta','na quinta','na sexta','no sábado','no domingo'][low]} (${tot[low]}); faixa de saída mais cheia: ${String(peak*2).padStart(2,'0')}h–${String(peak*2+2).padStart(2,'0')}h. Dia e hora de saída em horário de Brasília.</p>
+  <table class="hm"><thead><tr><th>Voos/dia</th>${DOWL.map(d=>`<th>${d}</th>`).join('')}</tr></thead><tbody>`+
+  cs.map(c=>`<tr><td class="lbl" style="color:var(--${c})">${FULL[c]}</td>${by[c].map(n=>cell(n,max,c)).join('')}</tr>`).join('')+
+  (cs.length>1?`<tr class="tot"><td class="lbl">Total</td>${tot.map(n=>cell(n,maxT,'ink')).join('')}</tr>`:'')+`</tbody></table>
+  <table class="hm hr" style="margin-top:10px"><thead><tr><th>Hora</th>${[...Array(12).keys()].map(b=>`<th>${String(b*2).padStart(2,'0')}</th>`).join('')}</tr></thead><tbody>`+
+  hb.map((r,i)=>`<tr><td class="lbl">${DOWL[i]}</td>${r.map(n=>cell(n,maxH,'ink')).join('')}</tr>`).join('')+`</tbody></table>
+  <div class="hmk">menos<i></i>mais · cada coluna da segunda tabela é uma faixa de 2 horas</div></div>`}
 // voos
 function filter(){const q=$('q').value.trim().toUpperCase(),t=$('ft').value,d=$('fd').value;
   const terms=q.split(/\s+/).filter(Boolean);
