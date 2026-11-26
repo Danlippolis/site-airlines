@@ -28,6 +28,10 @@ h1{font-weight:800;font-size:30px;line-height:1.05;margin:0 0 6px;text-wrap:bala
 .meta{color:var(--mute);font-size:14px;margin:0 0 14px}
 input,select,button{font:inherit;font-size:16px;color:var(--ink)}
 input:focus-visible,select:focus-visible,button:focus-visible,.fl:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.valid{display:flex;gap:10px;align-items:flex-start;margin:4px 0 10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.valid b{display:block;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}.valid small{display:block;font-size:13px;color:var(--mute)}
+.vdot{width:10px;height:10px;border-radius:50%;margin-top:6px;flex:none;background:var(--mute)}
+.valid.ok .vdot{background:light-dark(#1d7a4a,#5fd39a)}.valid.old{border-color:light-dark(#c98a1b,#d9a54a)}.valid.old .vdot{background:light-dark(#c98a1b,#d9a54a)}
 .cias{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 .cia{display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);cursor:pointer;text-align:left}
 .cia[aria-pressed=false]{opacity:.45}.cia i{width:12px;height:12px;border-radius:50%;flex:none}.cia b{font-weight:800}.cia small{display:block;font-size:12px;color:var(--mute)}
@@ -118,6 +122,7 @@ tbody.fx tr{cursor:pointer}tbody.fx tr:hover td,tbody.fx tr.on td{background:var
   </div>
   <aside class="panel">
     <h1>Rotas RPL das companhias aéreas, fixo a fixo</h1>
+    <div class="valid" id="valid" role="status"><span class="vdot"></span><span><b id="vRange">Carregando a edição do RPL…</b><small id="vSub"></small></span></div>
     <p class="meta" id="meta">Carregando planos de voo…</p>
     <div class="cias" id="cias"></div>
     <div class="tabs" role="tablist">
@@ -285,6 +290,16 @@ $('cias').addEventListener('click',e=>{const b=e.target.closest('.cia');if(!b||b
 const TABS={cmp:'p-cmp',apt:'p-apt',cia:'p-cia',voo:'p-voo',sum:'p-sum'};
 for(const t in TABS)$('t-'+t).onclick=()=>{curTab=t;for(const u in TABS){$('t-'+u).setAttribute('aria-selected',u===t);$(TABS[u]).hidden=u!==t}
   if(t==='cmp'&&cmpKey)compare();else if(t==='apt'){if(!aptKey)setPlace($('ap'),[topApts()[0]]);airport()}else if(t==='cia')company();else if(t==='voo'&&sel)select(sel,false);else if(t==='sum'){hi=[];focusApt=null;draw();fit(Object.keys(APM).map(c=>({lat:D.airports[c][0],lon:D.airports[c][1]})))}};
+// ---- validade da edição do RPL, comparada com a data de hoje (horário de Brasília)
+function showValidity(m){const[y,mo,da]=m.edicao.split('-').map(Number),st=Date.UTC(y,mo-1,da),en=st+6*864e5;
+  const f=t=>new Date(t).toISOString().slice(0,10).split('-').reverse().join('/');
+  const now=new Date(Date.now()-3*36e5),today=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate());
+  const el=$('valid');let txt,cls;
+  if(today<st){txt=`Começa a valer em ${Math.round((st-today)/864e5)} dia(s)`;cls=''}
+  else if(today<=en){const left=Math.round((en-today)/864e5);txt=`Vigente · ${left?'termina em '+left+(left>1?' dias':' dia'):'último dia de validade'}`;cls='ok'}
+  else{const late=Math.round((today-en)/864e5);txt=`Edição vencida há ${late} ${late>1?'dias':'dia'} — a próxima é baixada na atualização automática diária`;cls='old'}
+  el.className='valid '+cls;$('vRange').textContent=`RPL válido de ${f(st)} a ${f(en)}`;
+  $('vSub').textContent=`${txt} · AIRAC ${m.airac} · dados gerados em ${(m.gerado_em||'').slice(0,10).split('-').reverse().join('/')}`}
 // ---- busca de aeroportos por ICAO, IATA ou cidade
 const norm=t=>String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
 const iata=c=>D.airports[c]?.[4]||'';
@@ -504,6 +519,7 @@ Promise.all([fetch('data/data.json').then(r=>r.json()),fetch('data/base.json').t
   d.points.forEach(p=>POINTNAMES.add(p[0]));RP=d.routes.map((r,i)=>routePts(i));
   for(const c of ALL)if(d.cias[c])on.add(c);
   $('srcs').textContent=Object.keys(d.cias).map(c=>FULL[c]).join(', ');$('ed').textContent=d.meta.edicao_txt||d.meta.edicao;$('airac').textContent=d.meta.airac;$('gen').textContent=(d.meta.gerado_em||'').replace('T',' ').replace('Z',' UTC');
+  showValidity(d.meta);
   const nc=Object.keys(d.cias).length;$('meta').textContent=`${nc} ${nc>1?'companhias':'companhia'} · ${fmtN(d.flights.length)} planos · ${fmtN(d.routes.length)} rotas distintas · ${Object.keys(d.airports).length} aeroportos`;
   $('ft').innerHTML+=[...new Set(d.flights.map(f=>f[2]))].sort().map(t=>`<option>${t}</option>`).join('');
   for(const f of d.flights){APM_ALL[f[3]]=(APM_ALL[f[3]]||0)+f[13];APM_ALL[f[4]]=(APM_ALL[f[4]]||0)+f[13]}buildPlaces();
