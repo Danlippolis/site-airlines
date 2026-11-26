@@ -1,12 +1,15 @@
 name: Publicar site
 
 # Publica a pasta site/ no GitHub Pages.
-# Roda quando alguém altera site/ na main, manualmente, ou chamado pelo workflow de atualização do RPL
-# (commits feitos pelo próprio GitHub Actions não disparam outros workflows, por isso a chamada direta).
+# Roda quando alguém altera site/ (ou este workflow) na main, manualmente, ou chamado pelo workflow de
+# atualização do RPL (commits feitos pelo próprio GitHub Actions não disparam outros workflows, por isso a
+# chamada direta).
 on:
   push:
     branches: [main]
-    paths: ["site/**"]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"   # sem isto, uma correção do deploy só vai ao ar no próximo push em site/
   workflow_dispatch:
   workflow_call:
 
@@ -15,22 +18,24 @@ permissions:
   pages: write
   id-token: write
 
+# Um deploy por vez. Não cancela o que está em andamento (recomendação do GitHub para Pages): cancelar no
+# meio pode deixar o deploy pela metade; os disparos que chegarem enquanto isso esperam na fila.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  # Upload e deploy em jobs separados (modelo oficial do GitHub Pages). Com os dois no mesmo job, o
-  # deploy-pages consulta o artefato ~0,4 s depois do upload e às vezes ainda não o enxerga
-  # ("No artifacts named github-pages were found"); a troca de job dá tempo para ele aparecer.
+  # Upload e deploy em jobs separados (modelo oficial do GitHub Pages). O deploy-pages lista os artefatos
+  # do run logo ao começar e o serviço às vezes ainda não enxerga o que acabou de ser finalizado
+  # ("No artifacts named github-pages were found"); a troca de job dá alguns segundos de folga.
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
           ref: main   # pega o commit mais novo, inclusive o que o job de atualização acabou de fazer
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
@@ -39,7 +44,18 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy-retry.outputs.page_url }}
     steps:
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
+        continue-on-error: true
+
+      # Se o artefato ainda não apareceu (ou o serviço do Pages oscilou), espera e tenta mais uma vez.
+      # A falha de "artefato não encontrado" acontece antes de criar o deploy, então repetir é seguro.
+      - name: Aguardar antes de tentar de novo
+        if: steps.deploy.outcome == 'failure'
+        run: sleep 30
+
+      - id: deploy-retry
+        if: steps.deploy.outcome == 'failure'
+        uses: actions/deploy-pages@v5
