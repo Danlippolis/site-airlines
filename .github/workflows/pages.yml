@@ -20,11 +20,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  # Upload e deploy em jobs separados (modelo oficial do GitHub Pages). Com os dois no mesmo job, o
+  # deploy-pages consulta o artefato ~0,4 s depois do upload e às vezes ainda não o enxerga
+  # ("No artifacts named github-pages were found"); a troca de job dá tempo para ele aparecer.
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -33,5 +33,13 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
       - id: deploy
         uses: actions/deploy-pages@v4
