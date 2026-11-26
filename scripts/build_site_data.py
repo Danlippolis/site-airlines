@@ -248,7 +248,16 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     data = {"meta": meta, "cias": {c: n for c, n in CIAS.items() if c in src}, "airports": apts, "points": points,
             "routes": routes, "flights": flights}
-    (out / "data.json").write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    dest = out / "data.json"
+    if dest.exists():  # mesmo conteúdo de antes: mantém o arquivo (e o horário de geração) para não gerar commit à toa
+        try:
+            prev = json.loads(dest.read_text(encoding="utf-8"))
+            if {**prev, "meta": {**prev["meta"], "gerado_em": None}} == {**data, "meta": {**meta, "gerado_em": None}}:
+                log.info("data.json sem mudanças de conteúdo; mantido.")
+                return 0
+        except (ValueError, KeyError):
+            pass
+    dest.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     log.info("data.json: %d planos, %d rotas, %d pontos, %d aeroportos (%.0f KB)", len(flights), len(routes), len(points),
              len(apts), (out / "data.json").stat().st_size / 1024)
     if issues or no_apt:
